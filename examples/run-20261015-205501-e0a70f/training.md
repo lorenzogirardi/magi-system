@@ -375,6 +375,11 @@ The offline suite grew from 186 to 208 tests, each fix with its own test, docume
 - A `policy_exists` claim on a path ("`.github/workflows/**` is protected") is refuted
   although true. It recurred in every run and made one proposal inadmissible in run 12.
 - Temperature-0 repetition loops cost minutes and tokens; the cap and retry contain them.
+- Reviewers see only the last 60,000 characters of the diff; in run 12 (~99k) the router,
+  models and registry were cut off, as several reviewers noted. Found while writing the
+  article on run 12.
+- A correct final-review finding in run 12 (empty image tag `nginx:` not flagged) was refuted
+  by verification; see [article.md](article.md) §5.5.
 - The deletion of `~/.magi/runs` in run 4 remains unexplained.
 
 ## 11. Lessons

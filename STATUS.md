@@ -99,6 +99,11 @@ requirements; `training.md`: all twelve runs and the non-functional fixes; Engli
 Open items from the real runs:
 - `policy_exists` claims on a path (`.github/workflows/**`) are refuted; the model means
   "is a protected path". Recurs in every run; not blocking in run 12.
+- Reviewers (specialists, final review) receive only the last 60,000 characters of the diff
+  (`diff[-60000:]` in `engine/nodes_impl.py` / `nodes_verify.py`); run 12's diff was ~99k, so
+  core files were not visible to them.
+- Finding verification can wrongly refute a correct finding: run 12's "`nginx:` with an empty
+  tag is not flagged" was refuted, but the code does not flag it.
 - Temperature-0 repetition loops (reviews ~150k chars) are cut by the 32k cap and retried;
   they cost time/tokens. Not addressed (a penalty could also break JSON; measure first).
 - `~/.magi/runs` contents disappeared during run 4 (cause unknown, outside magi-system);
