@@ -13,12 +13,35 @@ Every run ends in one of two ways:
 
 It never pushes, merges or deploys. Those stay a separate, human-authorized step.
 
-The core idea: a single LLM designing a change can be confidently wrong. magi-system asks
-**three independent architects** to analyze the request and propose a plan, then lets code,
-not a vote, decide which plan is acceptable. Every factual claim an architect makes (a file
-exists, a function exists, a dependency version is available, a policy allows something) is
-checked against the real repository with tools. A plan built on a false claim, an unresolved
-critical unknown or a confirmed blocker is rejected, however many architects support it.
+## Why three architects
+
+Everything downstream starts from the architecture. Developers implement the plan, QA tests
+against it, SRE and Security review it, the Tech Writer documents it. If the plan comes from a
+single architect and that architect hallucinates (a function that does not exist, a library
+capability the installed version lacks, a policy nobody wrote, an unstated business rule), the
+error propagates: every later agent builds faithfully on a wrong foundation, and the result can
+look consistent while being wrong.
+
+magi-system is designed to **reduce** this risk, not to eliminate it:
+
+- **Three independent analyses.** Melchior, Balthasar and Casper start from the same snapshot
+  but work separately, with different primary perspectives, so a hallucination in one of them
+  is less likely to be shared by all three.
+- **Facts are checked, not voted on.** Every factual claim a plan relies on (file, symbol,
+  dependency version, policy key, command) is verified against the real repository with tools.
+  A plan built on a refuted claim, an unresolved critical unknown or a confirmed blocker is
+  rejected, however many architects support it.
+- **Cross-review.** Each architect scores the other two proposals with authors masked, and
+  QA, SRE and Security review them before any code is written.
+- **Verification after implementation.** Tests, acceptance checks and a final review by the
+  three architects run on the actual change, so problems that slipped through design can still
+  stop the run.
+
+What it does **not** guarantee: the three architects can share the same mistake (same
+training, same misleading context), different models do not remove that, and not every claim
+can be checked mechanically. Operational guarantees and business assumptions stay unverified
+and block a plan when critical, instead of being trusted. The goal is fewer and earlier caught
+errors, plus an explicit failure instead of a confident wrong answer, not certainty.
 
 ## The three architects
 
