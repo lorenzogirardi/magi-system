@@ -1,5 +1,22 @@
 # magi-system
 
+```text
+                     _______________________
+                    /                       \
+                   /      CASPER-MAGI 3      \
+                  /   challenge assumptions   \
+                  \___________________________/
+                       //               \\
+                      //    M  A  G  I   \\
+   __________________//                   \\__________________
+  /                  \     S Y S T E M     /                  \
+ /  BALTHASAR-MAGI 2  \===================/  MELCHIOR-MAGI 1   \
+ \   failure modes    /                   \   minimal change   /
+  \__________________/                     \__________________/
+
+          Three architects. Facts checked, not voted.
+```
+
 ## Goal
 
 Give magi-system a software change request and a Git repository, and it delivers the change
