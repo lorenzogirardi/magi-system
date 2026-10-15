@@ -146,7 +146,7 @@ Nothing environment-specific or secret lives in the code:
 
 | What | Where |
 |---|---|
-| LLM API keys | Environment (`ANTHROPIC_API_KEY`). Never in config files, state, logs or reports. |
+| LLM API keys | Environment (`OPENROUTER_API_KEY`, primary; or `ANTHROPIC_API_KEY`). Never in config files, state, logs or reports. |
 | Git credentials | Your Git credential helper / SSH agent, used only to clone. URLs with embedded credentials are rejected. |
 | Langfuse | `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_HOST` + `langfuse: true` in settings. |
 | Budgets, models | Settings file passed with `--config` (`examples/settings.example.yaml`). |
@@ -164,7 +164,7 @@ Real providers: see [docs/providers.md](docs/providers.md).
     request-file: request.md
     image: docker.io/library/python:3.12
   env:
-    ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+    OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
 ```
 
 Uploads the verified patch and report as an artifact; never pushes. See

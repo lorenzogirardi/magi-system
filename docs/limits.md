@@ -11,7 +11,8 @@
   dependencies must be in the image or the repository.
 - **GitHub Action**: its run step was exercised locally with simulated `GITHUB_*`
   variables; the workflow itself has not run on GitHub yet. It never pushes or opens PRs.
-- **Anthropic adapter and Langfuse mirror** are not exercised by tests (network).
+- **Anthropic adapter and Langfuse mirror** are not exercised by tests (network). The
+  OpenRouter adapter is unit-tested with a mocked HTTP layer only.
 - **Publication**: only a local candidate branch and an exported patch. Push, pull
   request, merge and deployment are not implemented; the report always states
   "integrated: no, deployed: no".

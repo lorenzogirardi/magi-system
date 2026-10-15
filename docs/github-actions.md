@@ -38,7 +38,7 @@ jobs:
           request-file: ${{ runner.temp }}/request.md
           image: docker.io/library/python:3.12   # must have the tools your build/test needs
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
       - run: echo "status=${{ steps.magi.outputs.status }}"
 ```
 
@@ -79,7 +79,7 @@ container has no network.
   review.
 - **Keep the `default` profile in CI.** `local-dev` / `offline-test` profiles use the
   LocalRunner, which executes target code on the runner host: it can read the parent
-  process environment via `/proc`, including `ANTHROPIC_API_KEY`. Only the container runner
+  process environment via `/proc`, including `OPENROUTER_API_KEY` / `ANTHROPIC_API_KEY`. Only the container runner
   isolates target code from secrets.
 - `persist-credentials: false` on checkout: MAGI drops remotes in its workspace anyway, but
   there is no reason to leave a token in `.git/config`.

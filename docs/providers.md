@@ -1,12 +1,28 @@
 # Configuring real LLM providers
 
-Offline mode needs nothing. For real runs:
+Offline mode needs nothing. For real runs the primary provider is **OpenRouter**; direct
+Anthropic is also available.
 
-1. Install the provider extra: `uv sync --extra anthropic`.
-2. Export the key in your environment (never in files under version control):
-   `export ANTHROPIC_API_KEY=...`
-3. Copy `examples/settings.example.yaml`, set models per agent, and pass it:
+| Provider | `provider:` | Key (environment) | Extra | Usage / cost reported |
+|---|---|---|---|---|
+| OpenRouter (primary) | `openrouter` | `OPENROUTER_API_KEY` | none (stdlib HTTP) | tokens and cost (`max_cost_usd` enforced) |
+| Anthropic (direct) | `anthropic` | `ANTHROPIC_API_KEY` | `uv sync --extra anthropic` | tokens only |
+
+1. Export the key in your environment (never in files under version control):
+   `export OPENROUTER_API_KEY=...`
+2. Copy `examples/settings.example.yaml`, set the model (any OpenRouter model id, e.g.
+   `deepseek/deepseek-v4.1-flash`) per agent or in `default_agent`, and pass it:
    `magi run --repo ... --ref ... --request-file request.md --config settings.yaml`.
+
+### OpenRouter details
+
+- Endpoint: `OPENROUTER_BASE_URL` (default `https://openrouter.ai/api/v1`); calls
+  `POST {base}/chat/completions` with `usage: {include: true}`, so every response carries
+  `prompt_tokens`, `completion_tokens` and `cost` (USD), which feed the run budget.
+- The JSON schema is appended to the prompt (same as the Anthropic adapter); output is
+  parsed and validated by the platform, invalid output is a typed `invalid_output` failure.
+- HTTP errors, an `error` body or no `choices` → `provider_error`; socket timeout →
+  `timeout`. Both are retried within `max_technical_retries`.
 
 Per-agent settings (`provider`, `model`, `temperature`, `max_output_tokens`,
 `timeout_seconds`) are keyed by internal id: `magi.melchior`, `magi.balthasar`,

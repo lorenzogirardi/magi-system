@@ -1,12 +1,12 @@
 # STATUS — magi-system
 
-Last updated: 2026-10-15 (session 3, revision for GitHub Actions).
+Last updated: 2026-10-15 (session 4, OpenRouter provider + first local real-target prep).
 
 ## State
 
 v1 is implemented and runs end-to-end offline. `uv run magi demo` → SUCCESS on a
 temporary greeter repo (POSIX sh/Makefile stack, distinct from magi-system).
-`uv run pytest` → **186 passed** (~65 s; the real-container test runs when
+`uv run pytest` → **189 passed, 1 skipped** (~65 s; the real-container test runs when
 `debian:bookworm-slim` is pulled, otherwise it is skipped). `uv run ruff check src tests` clean.
 Nothing committed yet.
 
@@ -16,6 +16,12 @@ composite GitHub Action + CI workflow, dead-code removal. Full offline run throu
 podman ContainerRunner verified manually (`python:3.12`). The action's run step was executed
 locally with simulated `GITHUB_*` vars (success, bad ref, POLICY_DENIED); **the workflows
 have not run on GitHub yet** (needs a push).
+
+Session 4: OpenRouter is the primary LLM provider (`provider: openrouter`,
+`OPENROUTER_API_KEY`, stdlib HTTP, usage + cost reported); Anthropic direct kept as secondary.
+User directive: Anthropic is never used directly. Preparing the first real local run on the
+pytbak FastAPI repo (scratch clone + `.magi/config.yaml`, docker image with deps, DeepSeek
+v4.1 flash via OpenRouter).
 
 ## What exists
 
@@ -65,7 +71,7 @@ have not run on GitHub yet** (needs a push).
 
 See `docs/limits.md`. In priority order:
 1. Push and watch the first CI run (`test` + `action-selftest`) — user's decision.
-2. First real-LLM run on a throwaway target (needs `ANTHROPIC_API_KEY`, user's decision on budget).
+2. First real-LLM run on a throwaway target (OpenRouter, `OPENROUTER_API_KEY`) — in progress.
 3. Tag a release (`v1`) so consumers can pin `uses: lorenzogirardi/magi-system@v1`.
 4. `magi cleanup` / retention command (WorkspaceManager.prune exists).
 5. Proposal merging (new versioned proposal from parts) — not implemented.

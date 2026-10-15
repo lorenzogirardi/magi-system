@@ -1,5 +1,5 @@
 # Run settings for `magi run --config settings.yaml`. Contains NO secrets:
-# provider API keys are read from the environment (e.g. ANTHROPIC_API_KEY).
+# provider API keys are read from the environment (OPENROUTER_API_KEY, or ANTHROPIC_API_KEY).
 budget:
   max_architecture_rounds: 2      # initial round + 1 bounded revision
   max_fixes_per_finding: 2
@@ -12,17 +12,16 @@ budget:
   # max_cost_usd: 20              # enforced only when the provider reports cost
 
 default_agent:
-  provider: anthropic
-  model: claude-opus-5
+  provider: openrouter            # or: anthropic (direct)
+  model: deepseek/deepseek-v4.1-flash   # any OpenRouter model id
   temperature: 0.0
   max_output_tokens: 8192
   timeout_seconds: 180
 
 # Per-agent overrides (internal ids). Different models do not remove common-mode errors;
 # tool-based verification does.
-agents:
-  magi.balthasar: {provider: anthropic, model: claude-sonnet-5-5}
-  magi.casper: {provider: anthropic, model: claude-sonnet-5-5}
-  dev.pair: {provider: anthropic, model: claude-sonnet-5-5}
+agents: {}
+# Example:
+#   magi.casper: {provider: openrouter, model: deepseek/deepseek-v4-pro}
 
 langfuse: false   # true mirrors redacted events to Langfuse (LANGFUSE_* env vars, `langfuse` extra)
