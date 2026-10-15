@@ -119,6 +119,7 @@ def verifier(tmp_path: Path):
     (tmp_path / "src/a.sh").write_text("greet() {\n  echo hi\n}\n")
     (tmp_path / "package.json").write_text('{"dependencies": {"left-pad": "^1.3.0"}}')
     (tmp_path / "Makefile").write_text("test:\n\ttrue\n")
+    (tmp_path / "requirements.txt").write_text("# deps\nfastapi==0.143.1\nuvicorn[standard]==0.54.0  # server\n")
     policy = PolicyEngine("offline-test")
     return ClaimVerifier(tmp_path, policy, LocalRunner(policy, tmp_path), "c0ffee", 0)
 
@@ -134,9 +135,19 @@ def verifier(tmp_path: Path):
         ("symbol_exists", "src/a.sh::invented_api", "", True, "refuted"),
         ("symbol_exists", "src/a.sh::invented_api", "", False, "supported"),
         ("text_present", "src/a.sh", r"echo\s+hi", True, "supported"),
+        ("text_present", "src/a.sh", "greet() {", True, "supported"),  # literal with regex metachars
+        ("text_present", "src/a.sh", "greet(", True, "supported"),  # not a valid regex, matched literally
+        ("text_present", "src/a.sh", "farewell(", True, "refuted"),
         ("package_version", "left-pad>=1.0", "", True, "supported"),
         ("package_version", "left-pad>=2.0", "", True, "refuted"),
         ("package_version", "react", "", True, "refuted"),
+        ("package_version", "fastapi>=0.100", "", True, "supported"),
+        ("package_version", "requirements.txt::uvicorn", "", True, "supported"),
+        ("package_version", "fastapi>=1.0", "", True, "refuted"),
+        ("package_version", "fastapi==0.143.1", "", True, "supported"),
+        ("package_version", "fastapi==0.1.0", "", True, "refuted"),
+        ("package_version", "requirements.txt", "uvicorn[standard]==0.54.0", True, "supported"),
+        ("package_version", "requirements.txt", "fastapi==9.9.9", True, "refuted"),
         ("policy_exists", "limits.command_timeout_seconds", "", True, "supported"),
         ("policy_exists", "deployment.auto_approve", "", True, "refuted"),
         ("command_succeeds", "make test", "", True, "supported"),

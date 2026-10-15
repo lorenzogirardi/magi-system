@@ -134,7 +134,8 @@ class RunService:
         out = {}
         for agent in AGENT_IDS:
             cfg = settings.agent(agent)
-            out[agent] = make_adapter(cfg.provider, cfg.model, temperature=cfg.temperature, max_output_tokens=cfg.max_output_tokens)
+            out[agent] = make_adapter(cfg.provider, cfg.model, temperature=cfg.temperature, max_output_tokens=cfg.max_output_tokens,
+                                      routing=cfg.routing, reasoning=cfg.reasoning)
         return out
 
     def _context(self, run_id: str, run_input: RunInput, settings: RunSettings, project: ResolvedProjectConfig,
@@ -149,6 +150,7 @@ class RunService:
             timeouts={a: settings.agent(a).timeout_seconds for a in AGENT_IDS},
             budget=budget, events=events,
             max_tool_iterations=int(policy.effective["limits"]["max_agent_tool_iterations"]),
+            max_actions_per_turn=int(policy.effective["limits"]["max_agent_actions_per_turn"]),
         )
         return RunContext(run_id=run_id, run_input=run_input, policy=policy, workspaces=self.workspaces, runner=runner,
                           caller=caller, events=events, budget=budget, project=project)

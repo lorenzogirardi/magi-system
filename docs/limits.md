@@ -19,12 +19,20 @@
 - **Services for tests** (`services` in `.magi/config.yaml`) are parsed but not started.
 - **Proposal merging** (combining parts of proposals into a new versioned proposal) is
   not implemented; revisions create new proposal versions per architect.
+- **Text claims** (`text_present`) match the pattern literally first, then as a regex: a
+  quoted code line with `(`, `[` or `.` is not refuted by regex metacharacters.
 - **Symbol verification** is regex-based (definitions in common languages and shell
   functions / Makefile targets), not a real parser.
-- **Package capability checks** read `package.json` and `pyproject.toml` only, and
+- **Package capability checks** read `package.json`, `pyproject.toml` and `requirements.txt` only
+  (spec `name`, `name>=ver` or `name==ver`, in `target` or, with a manifest as `target`, in
+  `pattern`), and
   compare declared minimum versions, not installed versions.
 - **Agent timeouts** abandon the provider call thread; the provider SDK timeout is also
   set so the call ends on its own.
 - **Concurrency**: one process drives a run (file lock). Different runs can run in
   parallel processes; SQLite is shared with WAL.
 - **Retention**: `WorkspaceManager.cleanup/prune` exist but no CLI command exposes them yet.
+- **Laptop sleep.** On macOS, timeouts use a clock that stops while the system sleeps,
+  and open connections are reset on wake. A run left unattended can hang until wake and
+  then lose its in-flight model calls (reported as retryable `provider_error`). Keep the
+  machine awake for the duration of the run: `caffeinate -i uv run magi run ...`.

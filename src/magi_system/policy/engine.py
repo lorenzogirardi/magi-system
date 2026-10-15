@@ -115,7 +115,10 @@ class PolicyEngine:
     # -- commands -------------------------------------------------------------------------
 
     def check_command(self, command: str | list[str]) -> CommandDecision:
-        argv = tuple(shlex.split(command) if isinstance(command, str) else command)
+        try:
+            argv = tuple(shlex.split(command) if isinstance(command, str) else command)
+        except ValueError as exc:  # e.g. unbalanced quotes: denied, never a crash
+            return CommandDecision(False, f"command cannot be parsed: {exc}", ())
         if not argv:
             return CommandDecision(False, "empty command", argv)
         joined = " ".join(argv)

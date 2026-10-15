@@ -85,3 +85,17 @@ def test_budget_hook_called(ws):
     t = box(ws, AgentId.MELCHIOR, on_call=seen.append)
     t.call("list_files", {})
     assert seen == ["list_files"]
+
+
+def test_read_file_pages_large_files_and_grep_reports_truncation(ws):
+    from magi_system.tools.toolbox import MAX_GREP_MATCHES, MAX_READ_BYTES
+    (ws / "src/big.txt").write_text("x" * (MAX_READ_BYTES + 5))
+    t = box(ws, AgentId.MELCHIOR)
+    first = t.call("read_file", {"path": "src/big.txt"})
+    assert len(first["content"]) == MAX_READ_BYTES and f"offset={MAX_READ_BYTES}" in first["truncated"]
+    rest = t.call("read_file", {"path": "src/big.txt", "offset": MAX_READ_BYTES})
+    assert rest["content"] == "xxxxx" and "truncated" not in rest
+    assert "truncated" not in t.call("read_file", {"path": "src/a.sh"})
+    (ws / "src/many.txt").write_text("hit\n" * (MAX_GREP_MATCHES + 1))
+    g = t.call("grep", {"pattern": "hit"})
+    assert len(g["matches"]) == MAX_GREP_MATCHES and "truncated" in g

@@ -48,6 +48,7 @@ class ModelResponse:
     output_tokens: int | None = None
     cost_usd: float | None = None
     model: str = ""
+    truncated: bool = False  # the provider stopped at max_output_tokens
 
 
 class ModelAdapter(Protocol):
@@ -60,7 +61,11 @@ _FENCE = re.compile(r"```(?:json)?\s*(\{[\s\S]*\})\s*```")
 
 
 def parse_structured[T: BaseModel](text: str, schema: type[T]) -> T:
-    """Parse the first JSON object in `text` and validate it against `schema`."""
+    """Parse the JSON object in `text` and validate it against `schema`.
+
+    Accepts a fenced block or one object surrounded by prose; trailing data after an
+    object that starts the text (e.g. a second object) is rejected as ambiguous.
+    """
     candidate = text.strip()
     m = _FENCE.search(candidate)
     if m:

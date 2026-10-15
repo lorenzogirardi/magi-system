@@ -33,7 +33,8 @@ def test_allowed_commands(policy, cmd):
 
 @pytest.mark.parametrize(
     "cmd",
-    ["curl http://x", "git push origin main", "/usr/bin/make", "sudo make", "rm -rf /", "nc -l 1", "", "npm install x"],
+    ["curl http://x", "git push origin main", "/usr/bin/make", "sudo make", "rm -rf /", "nc -l 1", "", "npm install x",
+     "python -c 'print(1)"],  # unbalanced quote: denied, not a crash
 )
 def test_denied_commands(policy, cmd):
     assert not policy.check_command(cmd).allowed

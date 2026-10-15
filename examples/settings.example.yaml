@@ -6,17 +6,19 @@ budget:
   max_remediation_cycles: 3
   max_technical_retries: 2
   max_duration_seconds: 3600
-  max_tool_calls: 500
-  max_llm_calls: 200
-  max_tokens: 2000000             # enforced only when the provider reports usage
-  # max_cost_usd: 20              # enforced only when the provider reports cost
+  max_tool_calls: 3000            # a 139-file repo used ~400 in the MAGI analysis alone
+  max_llm_calls: 600
+  max_tokens: 30000000            # enforced only when the provider reports usage; a full pytbak run used ~4M+
+  max_cost_usd: 5                 # enforced only when the provider reports cost (OpenRouter does): the real guard
 
 default_agent:
   provider: openrouter            # or: anthropic (direct)
   model: deepseek/deepseek-v4.1-flash   # any OpenRouter model id
   temperature: 0.0
-  max_output_tokens: 8192
-  timeout_seconds: 180
+  max_output_tokens: 32000        # bounds runaway (repetitive) generations; reasoning tokens count too
+  timeout_seconds: 300
+  routing: {sort: throughput}     # OpenRouter only -> request `provider` field; require_parameters is always added
+  # reasoning: {effort: low}      # OpenRouter only -> request `reasoning` field (omit to use the model default)
 
 # Per-agent overrides (internal ids). Different models do not remove common-mode errors;
 # tool-based verification does.

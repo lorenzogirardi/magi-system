@@ -62,7 +62,7 @@ class ClaimKind(StrEnum):
     FILE_EXISTS = "file_exists"
     SYMBOL_EXISTS = "symbol_exists"
     TEXT_PRESENT = "text_present"  # pattern present in a file
-    PACKAGE_VERSION = "package_version"  # dependency available (optionally >= version)
+    PACKAGE_VERSION = "package_version"  # dependency available (optionally >= or == version)
     POLICY_EXISTS = "policy_exists"  # policy key exists and is applicable
     COMMAND_SUCCEEDS = "command_succeeds"
     OPERATIONAL_GUARANTEE = "operational_guarantee"  # not mechanically checkable

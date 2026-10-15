@@ -26,7 +26,10 @@ _SYMBOL_DEF = (
     r"^\s*{name}\s*[:=]",
     r"^{name}:",  # Makefile target
 )
-_PKG = re.compile(r"^(?P<name>[A-Za-z0-9_.@/-]+)(?:\s*>=\s*(?P<ver>[0-9][0-9A-Za-z.]*))?$")
+_PKG = re.compile(
+    r"^(?P<name>[A-Za-z0-9_.@/-]+)(?:\[[^\]]*\])?(?:\s*(?P<op>>=|==)\s*(?P<ver>[0-9][0-9A-Za-z.]*))?$"
+)
+_MANIFESTS = ("package.json", "pyproject.toml", "requirements.txt")
 
 
 def _version_tuple(v: str) -> tuple:
@@ -73,10 +76,10 @@ class ClaimVerifier:
         return False, f"no definition of {symbol!r} in {path}"
 
     def _package(self, target: str) -> tuple[bool | None, str]:
-        m = _PKG.match(target.strip())
+        m = _PKG.match(target.strip().rsplit("::", 1)[-1])  # also "requirements.txt::fastapi"
         if not m:
             return None, f"unparseable package target {target!r}"
-        name, ver = m["name"], m["ver"]
+        name, op, ver = m["name"], m["op"], m["ver"]
         import json
         import tomllib
 
@@ -84,6 +87,10 @@ class ClaimVerifier:
             "package.json": lambda t: {**json.loads(t).get("dependencies", {}), **json.loads(t).get("devDependencies", {})},
             "pyproject.toml": lambda t: {
                 re.split(r"[<>=!~ \[]", d, maxsplit=1)[0]: d for d in tomllib.loads(t).get("project", {}).get("dependencies", [])
+            },
+            "requirements.txt": lambda t: {
+                re.split(r"[<>=!~ \[;]", d, maxsplit=1)[0]: d
+                for d in (line.split("#", 1)[0].strip() for line in t.splitlines()) if d and not d.startswith("-")
             },
         }
         for manifest, parse in manifests.items():
@@ -98,6 +105,10 @@ class ClaimVerifier:
                 if not ver:
                     return True, f"{name} declared in {manifest}"
                 declared = re.findall(r"[0-9][0-9A-Za-z.]*", str(deps[name]))
+                if op == "==":
+                    if declared and declared[0] == ver:
+                        return True, f"{name} pinned to {ver} in {manifest}"
+                    return False, f"{name} declared as {deps[name]!r} in {manifest}, not =={ver}"
                 if declared and _version_tuple(declared[0]) >= _version_tuple(ver):
                     return True, f"{name} {declared[0]} >= {ver} in {manifest}"
                 return False, f"{name} declared as {deps[name]!r} in {manifest}; capability >= {ver} not shown"
@@ -123,13 +134,20 @@ class ClaimVerifier:
             found, detail = self._symbol_found(claim.target)
         elif claim.kind is ClaimKind.TEXT_PRESENT:
             text = self._read(claim.target)
-            try:
-                found = text is not None and re.search(claim.pattern, text, re.MULTILINE) is not None
-                detail = f"pattern {claim.pattern!r} {'found' if found else 'not found'} in {claim.target}"
-            except re.error as exc:
-                found, detail = None, f"invalid pattern: {exc}"
+            # Models usually quote code literally ("f(x)", "[a]"): a literal match counts first,
+            # so regex metacharacters cannot turn a true quote into a refutation. A pattern that
+            # is not a valid regex can only be meant literally.
+            found = text is not None and claim.pattern in text
+            if text is not None and not found:
+                try:
+                    found = re.search(claim.pattern, text, re.MULTILINE) is not None
+                except re.error:
+                    found = False
+            detail = f"pattern {claim.pattern!r} {'found' if found else 'not found'} in {claim.target}"
         elif claim.kind is ClaimKind.PACKAGE_VERSION:
-            found, detail = self._package(claim.target)
+            # Also accepted: target = a manifest file, pattern = the spec ("fastapi==0.143.1").
+            spec = claim.pattern if claim.pattern and Path(claim.target).name in _MANIFESTS else claim.target
+            found, detail = self._package(spec)
         elif claim.kind is ClaimKind.POLICY_EXISTS:
             found, detail = self._policy(claim.target)
         elif claim.kind is ClaimKind.COMMAND_SUCCEEDS:

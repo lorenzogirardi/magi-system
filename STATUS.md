@@ -6,7 +6,7 @@ Last updated: 2026-10-15 (session 4, OpenRouter provider + first local real-targ
 
 v1 is implemented and runs end-to-end offline. `uv run magi demo` → SUCCESS on a
 temporary greeter repo (POSIX sh/Makefile stack, distinct from magi-system).
-`uv run pytest` → **189 passed, 1 skipped** (~65 s; the real-container test runs when
+`uv run pytest` → **208 passed, 1 skipped** (~65 s; the real-container test runs when
 `debian:bookworm-slim` is pulled, otherwise it is skipped). `uv run ruff check src tests` clean.
 Nothing committed yet.
 
@@ -22,6 +22,87 @@ Session 4: OpenRouter is the primary LLM provider (`provider: openrouter`,
 User directive: Anthropic is never used directly. Preparing the first real local run on the
 pytbak FastAPI repo (scratch clone + `.magi/config.yaml`, docker image with deps, DeepSeek
 v4.1 flash via OpenRouter).
+
+First real run (`run-20261015-181700-caaf4d`, stopped by the user, $0.057): all three MAGI
+analyses failed with invalid output: (1) truncation at `max_output_tokens: 16000`
+(reasoning tokens count), not recognised as such; (2) `Extra data` (trailing content after
+the JSON object); (3) retry resent the identical request, so it returned the identical
+output. Fixed: `ModelResponse.truncated` from `finish_reason`/`stop_reason`, retry with the
+error fed back, `excerpt` in `agent_invalid_output`. Parser stays strict on trailing data.
+Run 2 (`run-20261015-182545-d8cd84`, stopped): the new excerpt showed the real cause:
+DeepSeek answered in its native tool-call markup (DSML) instead of JSON, even after
+feedback. JSON mode (`json_object`) was not enough (run 3, `run-20261015-182809-325f16`):
+endpoint "Relace" accepts but does not enforce it; identical requests alternated JSON/DSML.
+Fixed: `response_format: json_schema` (strict, agent schema) + `provider.require_parameters`;
+3/3 valid on the captured real request (routed to Together).
+Run 4 (`run-20261015-183419-8e52e8`): MAGI analysis worked (Casper done cleanly) but calls
+were slow (minutes). Measured with a probe harness: endpoint dominates latency
+(`sort: throughput` 2–8 s vs 94 s average), reasoning tokens small, some calls degenerate
+into ~30k repetitive tokens. Added per-agent `routing` / `reasoning` (OpenRouter passthrough);
+settings use `routing: {sort: throughput}`, `max_output_tokens: 32000`.
+Open issue: during run 4 every run directory under `~/.magi/runs/` was deleted by something
+outside magi-system (no magi code path removes completed runs); run 4 was stopped.
+Run 5 (`~/magi-runs`, `run-20261015-184726-8f77ae`, stopped): fast and no invalid output
+(Casper done in 1m46s), but context exploded (269 actions in one turn, 721k input tokens).
+Added: max 10 actions per turn (policy), `read_file` 20 KB pages with `offset`, `grep` 200
+matches, all with explicit truncation markers.
+Run 6 (`run-20261015-185159-b080dd`, $0.16, 8 min): all three MAGI analyses completed
+(Casper after two technical retries: truncation, then 12 turns without a final answer).
+Ended BUDGET_EXHAUSTED (tool_calls 500) in proposals, then POLICY_DENIED because magi-system
+code was edited during the run (control-plane integrity check working as designed; never
+edit magi-system while a run is active). Also all 16 requirements were rejected: quotes
+translated to English from the Italian request. Fixed: analysis prompt v2 (quotes verbatim
+in the request's language), turn budget note in the tool loop, excerpt head+tail,
+budgets in settings 3000 tool calls / 600 LLM calls.
+Run 7 (`run-20261015-190205-1cbf27`): Casper analysis OK in 1m41s; Melchior and Balthasar
+hung 16 min then `Connection reset by peer` → INFRA_FAILURE. Root cause (pmset log): the Mac
+slept 19:02:40–19:18:48; monotonic timeouts do not advance in sleep and sockets reset on
+wake. Fix: run under `caffeinate -i`; adapter maps connection errors to retryable
+`provider_error`.
+Run 8 (`run-20261015-194904-6c86f4`, under caffeinate): first run through analysis (1.5 min),
+121 requirements accepted (Italian verbatim quotes), 3 proposals, cross-review and QA/SRE/
+Security/Tech Writer reviews; then no proposal admissible. Cause: verifier bug — `text_present`
+patterns were matched only as regex, so literal code quotes with `(`/`[`/`.` were refuted
+(76 refuted, 58 of them false). Fixed: literal match first, then regex; `requirements.txt`
+supported in package checks. Replaying run 8's 338 claims: 18 refuted, all genuine.
+Run 9 (`run-20261015-195700-0efdc1`, $0.80, 15 min): plan selected (Balthasar, score 4.32);
+DEV1 wrote 20 files (130/131 tests), DEV2 fixed the failing test; 8/10 mandatory gates PASS
+on `ea193e7` (build, test, lint, 14 QA scenarios, security, SRE, protected paths, scopes).
+Stopped BUDGET_EXHAUSTED (tokens 4M) in the Tech Writer step; docs.updated and
+magi.final_review not reached. Observed temperature-0 repetition loops (SRE review ~150k
+chars) caught by the 32k cap + retry. Settings: max_tokens 30M (cost cap $5 is the guard).
+Run 10 (`run-20261015-201806-1570b9`, $1.02, 23 min): Casper's plan selected; DEV1 green at
+first try; all checks + specialists PASS; Tech Writer done; checks re-run on the docs commit;
+`magi.final_review` FAIL with a real confirmed bug (k8s summary counts computed before
+findings truncation); routed back to DEV1, which fixed it with a regression test (all green).
+Then crashed in DEV2's pair step: `run_command` with unbalanced quotes made `shlex.split`
+raise ValueError, uncaught → INFRA_FAILURE. Fixed: unparseable commands are denied by the
+policy engine (agent gets an error). Resume not possible after a code change (by design).
+Run 11 (`run-20261015-204713-5e4a56`, stopped in round 1): all three proposals inadmissible
+because package claims written as target=`requirements.txt`, pattern=`fastapi==0.143.1`
+were refuted (target read as package name; `==` unsupported). Fixed: manifest target uses the
+pattern as spec, `==` pins and extras supported. Replay of run 11 claims: 43 → 9 refuted,
+all genuine.
+
+**Run 12 (`run-20261015-205501-e0a70f`): SUCCESS — first verified change on a real target.**
+$1.05, 19 min, 105 LLM calls, 5.3M tokens. Melchior's plan selected in round 0; DEV1 wrote
+21 files (145/146 tests; one wrong expectation), DEV2 corrected the test with a justified
+fix (verified: PyYAML yields 2 documents for `---\n---\n<doc>`); all 10 mandatory gates PASS
+on `5cce890`. Independent check: `candidate.patch` applies cleanly to the original repo,
+146 passed / 25 skipped in the container, API smoke via TestClient (401 without auth, catalog,
+k8s findings, json.validate negative outcome with HTTP 200, 404 unknown tool, 422 malformed,
+existing endpoints unaffected). Artifacts: `~/magi-runs/run-20261015-205501-e0a70f/artifacts/`.
+Written up in `examples/run-20261015-205501-e0a70f/` (`article.md`: run 12 and functional
+requirements; `training.md`: all twelve runs and the non-functional fixes; English
+`request.md`; sanitized artifacts).
+
+Open items from the real runs:
+- `policy_exists` claims on a path (`.github/workflows/**`) are refuted; the model means
+  "is a protected path". Recurs in every run; not blocking in run 12.
+- Temperature-0 repetition loops (reviews ~150k chars) are cut by the 32k cap and retried;
+  they cost time/tokens. Not addressed (a penalty could also break JSON; measure first).
+- `~/.magi/runs` contents disappeared during run 4 (cause unknown, outside magi-system);
+  runs since use `--runs-root ~/magi-runs` with no recurrence.
 
 ## What exists
 

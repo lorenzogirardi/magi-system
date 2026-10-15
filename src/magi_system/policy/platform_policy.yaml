@@ -68,6 +68,7 @@ limits:
   command_timeout_seconds: 300
   max_output_bytes: 200000
   max_agent_tool_iterations: 12
+  max_agent_actions_per_turn: 10   # extra actions in one turn are answered with an error, not run
 
 decision:
   # Fan-in quorum: number of valid MAGI results required to select a plan.

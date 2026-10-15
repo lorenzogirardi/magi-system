@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 from enum import StrEnum
+from typing import Any
 from urllib.parse import urlsplit, urlunsplit
 
 from pydantic import Field, field_validator
@@ -88,6 +89,10 @@ class AgentModelConfig(StrictModel):
     temperature: float = 0.0
     max_output_tokens: int = 8192
     timeout_seconds: float = 120.0
+    # OpenRouter only, passed through to the request: `routing` -> `provider` (e.g.
+    # {"sort": "throughput"}), `reasoning` -> `reasoning` (e.g. {"effort": "low"}).
+    routing: dict[str, Any] | None = None
+    reasoning: dict[str, Any] | None = None
 
 
 class RunInput(StrictModel):

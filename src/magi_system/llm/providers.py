@@ -6,6 +6,7 @@ state, checkpoints or reports.
 
 from __future__ import annotations
 
+import http.client
 import json
 import os
 import urllib.error
@@ -54,6 +55,7 @@ class AnthropicAdapter:
             output_tokens=msg.usage.output_tokens,
             cost_usd=None,  # not reported by the API; budgets fall back to token/call limits
             model=msg.model,
+            truncated=msg.stop_reason == "max_tokens",
         )
 
 
@@ -68,19 +70,25 @@ class OpenRouterAdapter:
     """Any OpenRouter model via its OpenAI-compatible HTTP API (stdlib only, no extra).
 
     Key: OPENROUTER_API_KEY. Endpoint: OPENROUTER_BASE_URL (default: the public API).
-    OpenRouter reports usage and cost, so token and cost budgets are enforced.
+    OpenRouter reports usage and cost, so token and cost budgets are enforced. Requests use
+    schema-constrained output (`response_format: json_schema`, `require_parameters`).
     """
 
     name = "openrouter"
     DEFAULT_BASE_URL = "https://openrouter.ai/api/v1"
 
-    def __init__(self, model: str, *, temperature: float = 0.0, max_output_tokens: int = 8192) -> None:
+    def __init__(
+        self, model: str, *, temperature: float = 0.0, max_output_tokens: int = 8192,
+        routing: dict | None = None, reasoning: dict | None = None,
+    ) -> None:
         if not os.environ.get("OPENROUTER_API_KEY"):
             raise ModelProviderError("OPENROUTER_API_KEY is not set")
         self.base_url = os.environ.get("OPENROUTER_BASE_URL", self.DEFAULT_BASE_URL).rstrip("/")
         self.model = model
         self.temperature = temperature
         self.max_output_tokens = max_output_tokens
+        self.routing = routing or {}
+        self.reasoning = reasoning
 
     def complete(self, request: ModelRequest, *, timeout: float) -> ModelResponse:
         body = {
@@ -91,8 +99,18 @@ class OpenRouterAdapter:
                 {"role": "system", "content": request.system},
                 {"role": "user", "content": _json_prompt(request)},
             ],
+            # Schema-constrained output, routed only to endpoints that enforce it. Plain JSON
+            # mode is not enough: some endpoints ignore it, and DeepSeek v4.x then answers in
+            # its native tool-call markup instead of the requested JSON.
+            "response_format": {
+                "type": "json_schema",
+                "json_schema": {"name": request.schema_name, "strict": True, "schema": request.json_schema},
+            },
+            "provider": {**self.routing, "require_parameters": True},
             "usage": {"include": True},
         }
+        if self.reasoning is not None:
+            body["reasoning"] = self.reasoning
         req = urllib.request.Request(
             f"{self.base_url}/chat/completions",
             data=json.dumps(body).encode(),
@@ -112,21 +130,31 @@ class OpenRouterAdapter:
             if isinstance(getattr(exc, "reason", None), TimeoutError):
                 raise ModelTimeout(str(exc)) from exc
             raise ModelProviderError(str(exc)) from exc
+        except (OSError, http.client.HTTPException) as exc:  # e.g. connection reset after a laptop sleep
+            raise ModelProviderError(f"connection error: {exc}") from exc
         if "error" in data or not data.get("choices"):
             raise ModelProviderError(f"provider error: {str(data.get('error', data))[:500]}")
         usage = data.get("usage") or {}
+        choice = data["choices"][0]
         return ModelResponse(
-            text=data["choices"][0]["message"].get("content") or "",
+            text=choice["message"].get("content") or "",
             input_tokens=usage.get("prompt_tokens"),
             output_tokens=usage.get("completion_tokens"),
             cost_usd=usage.get("cost"),
             model=data.get("model", self.model),
+            truncated=choice.get("finish_reason") == "length",
         )
 
 
-def make_adapter(provider: str, model: str, *, temperature: float, max_output_tokens: int):
+def make_adapter(
+    provider: str, model: str, *, temperature: float, max_output_tokens: int,
+    routing: dict | None = None, reasoning: dict | None = None,
+):
     if provider == "anthropic":
+        if routing or reasoning:
+            raise ModelProviderError("'routing' and 'reasoning' are supported only by provider 'openrouter'")
         return AnthropicAdapter(model, temperature=temperature, max_output_tokens=max_output_tokens)
     if provider == "openrouter":
-        return OpenRouterAdapter(model, temperature=temperature, max_output_tokens=max_output_tokens)
+        return OpenRouterAdapter(model, temperature=temperature, max_output_tokens=max_output_tokens,
+                                 routing=routing, reasoning=reasoning)
     raise ModelProviderError(f"unknown provider {provider!r}")

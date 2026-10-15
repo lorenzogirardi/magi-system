@@ -28,7 +28,8 @@ from magi_system.policy.engine import (
     normalize_rel_path,
 )
 
-MAX_READ_BYTES = 200_000
+MAX_READ_BYTES = 20_000  # per read_file call; larger files are read in pages with `offset`
+MAX_GREP_MATCHES = 200
 COMMAND_ROLES = CODE_WRITER_ROLES | {AgentId.QA, AgentId.SRE, AgentId.SECURITY, AgentId.VERIFIER}
 
 
@@ -56,7 +57,7 @@ class Toolbox:
     def available(self) -> dict[str, str]:
         tools = {
             "list_files": "List repository files. args: {prefix?: str}",
-            "read_file": "Read a text file. args: {path: str}",
+            "read_file": f"Read a text file, at most {MAX_READ_BYTES} bytes per call. args: {{path: str, offset?: int}}",
             "grep": "Search a regex in files. args: {pattern: str, glob?: str}",
         }
         if self.role in CODE_WRITER_ROLES | DOC_WRITER_ROLES:
@@ -105,12 +106,18 @@ class Toolbox:
         files = [rel for rel, _ in self._iter_files() if rel.startswith(prefix)]
         return {"files": files[:2000], "summary": f"{len(files)} files"}
 
-    def _t_read_file(self, path: str) -> dict[str, Any]:
+    def _t_read_file(self, path: str, offset: int = 0) -> dict[str, Any]:
         rel, full = self.resolve(path)
         if not full.is_file():
             raise ToolError(f"file not found: {rel}")
-        data = full.read_bytes()[:MAX_READ_BYTES]
-        return {"path": rel, "content": data.decode(errors="replace"), "summary": f"read {rel}"}
+        raw = full.read_bytes()
+        end = min(len(raw), offset + MAX_READ_BYTES)
+        out = {"path": rel, "content": raw[offset:end].decode(errors="replace"), "summary": f"read {rel}"}
+        if offset or end < len(raw):
+            out["summary"] = f"read {rel} bytes {offset}-{end} of {len(raw)}"
+        if end < len(raw):
+            out["truncated"] = f"file continues: call read_file with offset={end}"
+        return out
 
     def _t_grep(self, pattern: str, glob: str = "**") -> dict[str, Any]:
         try:
@@ -127,9 +134,10 @@ class Toolbox:
                 continue
             for i, line in enumerate(lines, 1):
                 if rx.search(line):
+                    if len(hits) >= MAX_GREP_MATCHES:
+                        return {"matches": hits, "summary": f"first {MAX_GREP_MATCHES} matches",
+                                "truncated": "more matches exist: narrow the pattern or glob"}
                     hits.append({"path": rel, "line": i, "text": line[:300]})
-                    if len(hits) >= 500:
-                        break
         return {"matches": hits, "summary": f"{len(hits)} matches"}
 
     # -- write tools ----------------------------------------------------------------------

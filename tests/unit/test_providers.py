@@ -55,6 +55,9 @@ def test_complete_maps_text_usage_and_cost(adapter, monkeypatch):
     assert seen["auth"] == "Bearer test-key"
     assert seen["body"]["model"] == "vendor/model" and seen["body"]["messages"][0] == {"role": "system", "content": "sys"}
     assert '"type": "object"' in seen["body"]["messages"][1]["content"]
+    assert seen["body"]["response_format"] == {
+        "type": "json_schema", "json_schema": {"name": "X", "strict": True, "schema": {"type": "object"}}}
+    assert seen["body"]["provider"] == {"require_parameters": True}
     assert (out.text, out.input_tokens, out.output_tokens, out.cost_usd) == ('{"ok": true}', 10, 5, 0.0012)
 
 
@@ -80,6 +83,41 @@ def test_errors_are_typed(adapter, monkeypatch):
     with pytest.raises(ModelProviderError, match="429"):
         adapter.complete(REQ, timeout=1)
 
+    def reset(req, timeout):
+        raise ConnectionResetError(54, "Connection reset by peer")
+
+    monkeypatch.setattr(providers.urllib.request, "urlopen", reset)
+    with pytest.raises(ModelProviderError, match="connection error"):
+        adapter.complete(REQ, timeout=1)
+
     monkeypatch.setattr(providers.urllib.request, "urlopen", lambda req, timeout: _Resp(b'{"error": {"message": "bad model"}}'))
     with pytest.raises(ModelProviderError, match="bad model"):
         adapter.complete(REQ, timeout=1)
+
+
+def test_finish_reason_length_marks_truncated(adapter, monkeypatch):
+    body = {"choices": [{"message": {"content": '{"a": '}, "finish_reason": "length"}], "usage": {}}
+    monkeypatch.setattr(providers.urllib.request, "urlopen", lambda req, timeout: _Resp(json.dumps(body).encode()))
+    assert adapter.complete(REQ, timeout=1).truncated is True
+
+
+def test_routing_and_reasoning_are_passed_through(monkeypatch):
+    monkeypatch.setenv("OPENROUTER_API_KEY", "k")
+    a = providers.make_adapter("openrouter", "m", temperature=0.0, max_output_tokens=10,
+                               routing={"sort": "throughput", "require_parameters": False}, reasoning={"effort": "low"})
+    seen = {}
+
+    def fake_urlopen(req, timeout):
+        seen.update(json.loads(req.data))
+        return _Resp(b'{"choices": [{"message": {"content": "{}"}}], "usage": {}}')
+
+    monkeypatch.setattr(providers.urllib.request, "urlopen", fake_urlopen)
+    a.complete(REQ, timeout=1)
+    # require_parameters cannot be switched off: schema enforcement depends on it
+    assert seen["provider"] == {"sort": "throughput", "require_parameters": True}
+    assert seen["reasoning"] == {"effort": "low"}
+
+
+def test_routing_rejected_for_anthropic():
+    with pytest.raises(ModelProviderError, match="only by provider 'openrouter'"):
+        providers.make_adapter("anthropic", "m", temperature=0.0, max_output_tokens=10, routing={"sort": "latency"})

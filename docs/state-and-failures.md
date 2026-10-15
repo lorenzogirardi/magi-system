@@ -55,6 +55,34 @@ UNKNOWN. A project command that is missing or denied by policy makes its gate UN
 
 No state waits for a human.
 
+## Agent tool loop limits
+
+Agents work in bounded turns: each turn returns tool actions or a final answer, and the
+whole transcript (with every tool result) is resent on the next turn. To keep it bounded:
+
+| Limit | Value | Where | When reached |
+|---|---|---|---|
+| Turns per agent step | 12 | policy `limits.max_agent_tool_iterations` | `invalid_output` failure ("tool loop exceeded max iterations") |
+| Actions per turn | 10 | policy `limits.max_agent_actions_per_turn` | extra actions are not run; each gets `error: not executed: at most 10 actions per turn` in the results |
+| `read_file` size | 20000 bytes per call | `tools/toolbox.py` | result has `truncated: "file continues: call read_file with offset=N"`; pass `offset` to read the next page |
+| `grep` matches | 200 | `tools/toolbox.py` | result has `truncated: "more matches exist: narrow the pattern or glob"` |
+
+Each turn ends with `Turn i of N: k turn(s) left; at most 10 actions per turn.`; the last
+turn says `last turn. Return the final answer now, with no actions.` Nothing is cut silently. Before these limits a real run reached 269 actions in one turn and
+721k input tokens on a third turn.
+
+## Invalid and truncated model output
+
+Every agent call expects one JSON object matching its schema. If the output is not valid
+JSON, fails the schema, or was cut off by the provider at `max_output_tokens`
+(`finish_reason=length` / `stop_reason=max_tokens`), the call is retried once with the
+error appended to the request (resending the identical request at temperature 0 would
+return the identical output). Each rejected output emits `agent_invalid_output` with
+`detail` and a redacted `excerpt` (first and last 300 characters; the tail shows truncation
+and repetition loops). Tokens and cost of rejected
+calls count toward the budget. A second rejection is an `invalid_output` agent failure,
+handled by technical retries like any other agent failure.
+
 ## Fix loops (triage)
 
 | Issue | Route |
@@ -74,7 +102,7 @@ Each fix has findings, an owner, and a counter (`max_fixes_per_finding`,
 `max_architecture_rounds`, `max_fixes_per_finding`, `max_remediation_cycles`,
 `max_technical_retries`, `max_duration_seconds`, `max_tool_calls`, `max_llm_calls`,
 `max_tokens` (only when the provider reports usage), `max_cost_usd` (only when reported;
-the Anthropic adapter does not report cost, so call/token limits apply). Consumption is
+OpenRouter reports cost, the Anthropic adapter does not, so there call/token limits apply). Consumption is
 in `budget_used` in state and in the report.
 
 ## Reproducibility record
