@@ -1,0 +1,2806 @@
+diff --git a/CHANGELOG.md b/CHANGELOG.md
+index 2bcef1c..f02179c 100644
+--- a/CHANGELOG.md
++++ b/CHANGELOG.md
+@@ -8,6 +8,7 @@ Entries are added automatically on every merge to the default branch.
+ ## [Unreleased]
+ 
+ ### Added
++- Dev/SRE Toolbox: `GET /api/toolbox/tools` and `POST /api/toolbox/runs` (Basic Auth protected) with three local, bounded, synchronous tools — `json.validate`, `text.diff`, `k8s.manifest.inspect` — a uniform typed result contract, env-driven limits (`TOOLBOX_*`), and PyYAML pinned for safe parsing. No new service, queue, persistence or observability stack.
+ - Role-based agent pipeline (`agent-pipeline.yml`): an issue labelled `agent` is planned, implemented, checked, reviewed by two independent reviewers, fixed in a bounded loop, finally reviewed, documented and opened as a PR. It never merges.
+ - `agent-change.yml`: the same review and fix loop on every pull request except Renovate's (fix commits are pushed to the PR branch) and on every push straight to `main` (a fix PR is opened if something blocks).
+ - Deterministic changelog workflow (`changelog.yml`): one entry per push to `main`, no model involved.
+diff --git a/README.md b/README.md
+index 8fe5218..f968ca7 100755
+--- a/README.md
++++ b/README.md
+@@ -5,7 +5,7 @@ Migrated from Flask v1 — all original features preserved + major new capabilit
+ 
+ ## Architecture
+ 
+-```
++
+ ┌──────────────────────────────────────────────────────┐
+ │                    FastAPI App                        │
+ │  ┌──────┐  ┌───────┐  ┌──────┐  ┌────────────────┐  │
+@@ -21,7 +21,7 @@ Migrated from Flask v1 — all original features preserved + major new capabilit
+          │              │              │
+     PostgreSQL       Redis        Prometheus
+     (optional)     (optional)     + OTEL
+-```
++
+ 
+ **Fallback strategy**: PostgreSQL → Redis → In-Memory (automatic, zero-downtime).
+ 
+@@ -31,37 +31,37 @@ Migrated from Flask v1 — all original features preserved + major new capabilit
+ ## Quick Start
+ 
+ ### Local development (docker-compose)
+-```bash
++bash
+ cp .env.example .env
+ docker compose up -d
+ # App at http://localhost:8000
+ # Swagger UI at http://localhost:8000/docs
+ # ReDoc at http://localhost:8000/redoc
+ # Prometheus at http://localhost:9090
+-```
++
+ 
+ ### Local development (bare metal)
+-```bash
++bash
+ pip install -r requirements.txt
+ # Without PG/Redis (in-memory only):
+ APP_ENV=development uvicorn app.main:app --reload --port 8000
+-```
++
+ 
+ ### Production (Kubernetes + Helm)
+ 
+-```bash
++bash
+ helm install pytbak ./helm/pytbak \
+   --set postgresql.url="postgresql+asyncpg://user:pass@pg-host:5432/db" \
+   --set redis.url="redis://redis-host:6379/0" \
+   --set auth.username=admin \
+   --set auth.password=secure123
+-```
++
+ 
+ ### izanami cluster (192.168.1.14) — Redis + PostgreSQL dedicati
+ 
+ Redis e PostgreSQL sono deployati come chart indipendenti (fuori da questo repo):
+ 
+-```bash
++bash
+ # 1. Redis + Webdis (~/Storage/home/helm-redis)
+ helm upgrade --install redis ~/Storage/home/helm-redis \
+   --kube-context izanami \
+@@ -80,7 +80,7 @@ helm upgrade pytbak ./helm/pytbak \
+   --set auth.password=<AUTH_PASSWORD> \
+   --set redis.url="redis://:REDIS_PASSWORD@redis.redis.svc.cluster.local:6379/0" \
+   --set postgresql.url="postgresql+asyncpg://pytbak:PG_PASSWORD@postgresql.postgresql.svc.cluster.local:5432/pytbak"
+-```
++
+ 
+ > **Nota microk8s**: il provisioner hostpath non funziona con K8s 1.20+.
+ > Creare i PV manuali prima del deploy — vedere i README dei rispettivi chart.
+@@ -123,13 +123,36 @@ helm upgrade pytbak ./helm/pytbak \
+ | GET | `/mgmt/mappings` | Route mappings |
+ | GET | `/mgmt/threaddump` | Thread dump |
+ 
++### Dev/SRE Toolbox (`/api/toolbox`) — requires Basic Auth
++Modular, local, bounded and synchronous technical utilities inside the existing app.
++No network call, no Kubernetes cluster, no external credential, no queue, no
++persistence. See [docs/14-dev-sre-toolbox.md](docs/14-dev-sre-toolbox.md) for the full
++reference, limits and limitations.
++
++| Method | Path | Description |
++|--------|------|-------------|
++| GET | `/api/toolbox/tools` | Catalogue: id, description, version and input schema of every tool |
++| POST | `/api/toolbox/runs` | Run one tool and return a uniform typed result with a `run_id` |
++
++Tools: `json.validate`, `text.diff`, `k8s.manifest.inspect`.
++
++bash
++# List the tools
++curl -s -u admin:password http://localhost:8000/api/toolbox/tools | python3 -m json.tool
++
++# Validate a JSON document
++curl -s -u admin:password -X POST http://localhost:8000/api/toolbox/runs \
++  -H "Content-Type: application/json" \
++  -d '{"tool": "json.validate", "input": {"text": "{\"a\": 1}"}}' | python3 -m json.tool
++
++
+ ### MCP Server (`/api/mcp`) — requires Basic Auth
+ In-process [MCP](https://modelcontextprotocol.io) server, same container as the rest of
+ pytbak. 23 tools mirroring the REST API for LLM clients (Claude, OpenCode, etc.) — see
+ [docs/11-mcp-server.md](docs/11-mcp-server.md) for architecture, auth model, and full usage
+ examples.
+ 
+-```bash
++bash
+ # Python SDK example
+ python3 -c "
+ import asyncio, httpx
+@@ -146,7 +169,7 @@ async def main():
+ 
+ asyncio.run(main())
+ "
+-```
++
+ 
+ ### Observability
+ | Path | Description |
+@@ -163,7 +186,7 @@ asyncio.run(main())
+ ## Debug Features
+ 
+ ### Error Injection (any endpoint)
+-```bash
++bash
+ # Inject HTTP 500
+ curl http://localhost:8000/api/contexts?inject_error=500
+ 
+@@ -175,34 +198,34 @@ curl http://localhost:8000/api/contexts?inject_error=validation_error
+ 
+ # Custom error message
+ curl http://localhost:8000/api/contexts?inject_error=custom:database_timeout
+-```
++
+ 
+ ### Delay Injection (any endpoint)
+-```bash
++bash
+ # Fixed delay 3 seconds
+ curl http://localhost:8000/api/contexts?delay_ms=3000
+ 
+ # Random delay 0-5 seconds
+ curl http://localhost:8000/api/contexts?delay_ms=random
+-```
++
+ 
+ ### CPU Spike
+-```bash
++bash
+ curl -X POST http://localhost:8000/debug/cpu/spike \
+   -u admin:password \
+   -H "Content-Type: application/json" \
+   -d '{"duration": 30, "cores": 2}'
+-```
++
+ 
+ ### Network Scan
+-```bash
++bash
+ curl "http://localhost:8000/debug/network/scan?target=google.com:443" \
+   -u admin:password
+-```
++
+ 
+ ## curl Examples
+ 
+-```bash
++bash
+ # Create context
+ curl -X POST http://localhost:8000/api/contexts \
+   -H "Content-Type: application/json" \
+@@ -245,7 +268,15 @@ curl -u admin:password http://localhost:8000/debug/headers
+ 
+ # Random error (auth required)
+ curl -u admin:password http://localhost:8000/debug/random-error
+-```
++
++# Toolbox catalogue (auth required)
++curl -u admin:password http://localhost:8000/api/toolbox/tools
++
++# Run a toolbox tool (auth required)
++curl -u admin:password -X POST http://localhost:8000/api/toolbox/runs \
++  -H "Content-Type: application/json" \
++  -d '{"tool": "json.validate", "input": {"text": "{\"a\": 1}"}}'
++
+ 
+ ## Usage — Verified Docker Test Session
+ 
+@@ -254,7 +285,7 @@ All 5 containers running: **web**, **postgres**, **redis**, **prometheus**, **ot
+ 
+ ### 1. Health Check — PostgreSQL & Redis connected
+ 
+-```bash
++bash
+ $ curl -s http://localhost:8000/mgmt/health | python3 -m json.tool
+ {
+     "status": "UP",
+@@ -263,11 +294,11 @@ $ curl -s http://localhost:8000/mgmt/health | python3 -m json.tool
+         { "name": "postgresql", "status": "UP", "error": null }
+     ]
+ }
+-```
++
+ 
+ ### 2. Readiness & App Info
+ 
+-```bash
++bash
+ $ curl -s http://localhost:8000/mgmt/ready
+ {"status": "READY", "version": "2.0.0"}
+ 
+@@ -280,11 +311,11 @@ $ curl -s http://localhost:8000/mgmt/info | python3 -m json.tool
+         "environment": "development"
+     }
+ }
+-```
++
+ 
+ ### 3. CRUD Contexts (stored in PostgreSQL)
+ 
+-```bash
++bash
+ # Create
+ $ curl -s -X POST http://localhost:8000/api/contexts \
+   -H "Content-Type: application/json" \
+@@ -320,11 +351,11 @@ $ curl -s -X DELETE http://localhost:8000/api/contexts/ff0aa92e-...
+ # Verify empty
+ $ curl -s http://localhost:8000/api/contexts
+ []
+-```
++
+ 
+ ### 4. Legacy Endpoints
+ 
+-```bash
++bash
+ # Fibonacci
+ $ curl -s http://localhost:8000/api/fib/10
+ {"result": "55"}
+@@ -336,26 +367,26 @@ $ curl -s http://localhost:8000/api/sleep/1
+ # Redis counter
+ $ curl -s http://localhost:8000/api/count
+ {"counter": 1}
+-```
++
+ 
+ ### 5. Error Injection (any endpoint)
+ 
+-```bash
++bash
+ $ curl -s http://localhost:8000/mgmt/info?inject_error=500
+ {"error": "Injected error 500", "injected": true}
+-```
++
+ 
+ ### 6. Delay Injection
+ 
+-```bash
++bash
+ $ time curl -s http://localhost:8000/mgmt/ready?delay_ms=200
+ {"status": "READY", "version": "2.0.0"}
+ real    0m0.222s   # ~200ms delay confirmed
+-```
++
+ 
+ ### 7. Debug Endpoints (Basic Auth required)
+ 
+-```bash
++bash
+ # Echo headers
+ $ curl -s -u admin:password http://localhost:8000/debug/headers
+ {
+@@ -372,11 +403,11 @@ $ curl -s -u admin:password "http://localhost:8000/debug/dns?name=google.com"
+ # Without auth → 401
+ $ curl -s http://localhost:8000/debug/headers
+ {"detail": "Not authenticated"}   # HTTP 401
+-```
++
+ 
+ ### 8. Environment Variables (whitelisted)
+ 
+-```bash
++bash
+ $ curl -s http://localhost:8000/mgmt/env | python3 -m json.tool
+ {
+     "PATH": "/usr/local/bin:...",
+@@ -386,11 +417,11 @@ $ curl -s http://localhost:8000/mgmt/env | python3 -m json.tool
+     "DATABASE_URL": "postgresql+asyncpg://pytbak:pytbak@postgres:5432/pytbak",
+     "REDIS_URL": "redis://redis:6379/0"
+ }
+-```
++
+ 
+ ### 9. Swagger UI & Prometheus Metrics
+ 
+-```bash
++bash
+ # Swagger UI
+ $ curl -s -o /dev/null -w "%{http_code}" http://localhost:8000/docs
+ 200
+@@ -400,15 +431,15 @@ $ curl -s http://localhost:8000/metrics | head -3
+ # HELP python_gc_objects_collected_total Objects collected during gc
+ # TYPE python_gc_objects_collected_total counter
+ python_gc_objects_collected_total{generation="0"} 728.0
+-```
++
+ 
+ ### 10. Route Mappings
+ 
+-```bash
++bash
+ $ curl -s http://localhost:8000/mgmt/mappings | python3 -c \
+   "import sys,json; print(f'{len(json.load(sys.stdin)[\"mappings\"])} routes registered')"
+-31 routes registered
+-```
++33 routes registered
++
+ 
+ ### Test Summary
+ 
+@@ -432,7 +463,7 @@ $ curl -s http://localhost:8000/mgmt/mappings | python3 -c \
+ | Env vars | `GET /mgmt/env` | whitelisted |
+ | Swagger UI | `GET /docs` | 200 |
+ | Prometheus | `GET /metrics` | scrape-ready |
+-| Route count | `GET /mgmt/mappings` | 31 routes |
++| Route count | `GET /mgmt/mappings` | 33 routes |
+ 
+ ## Configuration
+ 
+@@ -446,6 +477,13 @@ All configuration via environment variables (Pydantic Settings). See [.env.examp
+ | `DIAG_USERNAME` | admin | Basic auth user for /debug and /api/mcp |
+ | `DIAG_PASSWORD` | password | Basic auth pass for /debug and /api/mcp |
+ | `MCP_ENABLED` | true | Mount the MCP server at /api/mcp |
++| `TOOLBOX_ENABLED` | true | Mount the Dev/SRE Toolbox at /api/toolbox |
++| `TOOLBOX_MAX_REQUEST_BYTES` | 1048576 | Max request body for POST /api/toolbox/runs |
++| `TOOLBOX_MAX_INPUT_BYTES` | 262144 | Max size of a single tool text input |
++| `TOOLBOX_MAX_YAML_DOCUMENTS` | 50 | Max YAML documents per manifest |
++| `TOOLBOX_MAX_YAML_DEPTH` | 32 | Max YAML nesting depth |
++| `TOOLBOX_MAX_FINDINGS` | 200 | Max findings returned by a tool |
++| `TOOLBOX_MAX_DIFF_CONTEXT_LINES` | 10 | Max context lines for text.diff |
+ | `OTEL_ENABLED` | false | Enable OpenTelemetry tracing |
+ | `OTEL_EXPORTER_OTLP_ENDPOINT` | http://localhost:4317 | OTLP endpoint |
+ | `PROMETHEUS_ENABLED` | true | Enable /metrics endpoint |
+@@ -455,15 +493,15 @@ All configuration via environment variables (Pydantic Settings). See [.env.examp
+ 
+ ## Tests
+ 
+-```bash
++bash
+ pip install -r requirements.txt
+ pytest -v --tb=short
+ pytest --cov=app --cov-report=term-missing
+-```
++
+ 
+ ## Project Structure
+ 
+-```
++
+ ├── app/
+ │   ├── main.py                  # FastAPI app + lifespan + create_app()
+ │   ├── auth.py                  # Basic auth dependency
+@@ -473,10 +511,16 @@ pytest --cov=app --cov-report=term-missing
+ │   │   └── tools.py             # MCP server (FastMCP), mounted at /api/mcp
+ │   ├── models/
+ │   │   ├── schemas.py           # Pydantic request/response models
++│   │   ├── toolbox.py           # Toolbox request/response/finding models
+ │   │   └── database.py          # SQLAlchemy async models + engine
++│   ├── toolbox/
++│   │   ├── base.py              # Tool protocol, enums, dataclasses, limits
++│   │   ├── registry.py          # Explicit tool registry
++│   │   └── tools/               # json_validate, text_diff, k8s_manifest_inspect
+ │   ├── routers/
+ │   │   ├── api.py               # /api — contexts CRUD + legacy
+ │   │   ├── debug.py             # /debug — network, CPU, diag tools
++│   │   ├── toolbox.py           # /api/toolbox — tool catalogue + runs
+ │   │   └── mgmt.py              # /mgmt — health, ready, info, env
+ │   ├── services/
+ │   │   ├── storage.py           # Unified PG→Redis→Memory fallback
+@@ -494,6 +538,7 @@ pytest --cov=app --cov-report=term-missing
+ │   ├── test_middleware.py
+ │   ├── test_mcp.py              # MCP tools, direct calls (base layer)
+ │   ├── test_storage.py
++│   ├── test_toolbox_*.py        # Toolbox unit + API + regression tests
+ │   └── integration/test_mcp.py  # MCP over real streamable-HTTP (mid/tip layer)
+ ├── helm/pytbak/                 # Helm chart (production K8s)
+ │   ├── values.yaml              # Default values
+@@ -506,11 +551,11 @@ pytest --cov=app --cov-report=term-missing
+ ├── requirements.txt
+ ├── pyproject.toml
+ └── .env.example
+-```
++
+ 
+ ## Sequence Diagram
+ 
+-```mermaid
++mermaid
+ sequenceDiagram
+     participant Client
+     participant FastAPI
+@@ -533,7 +578,7 @@ sequenceDiagram
+     end
+     Storage-->>FastAPI: ContextResponse
+     FastAPI-->>Client: 201 Created
+-```
++
+ 
+ ## Migration from Flask v1
+ 
+diff --git a/app/config/settings.py b/app/config/settings.py
+index 675856c..a797d77 100644
+--- a/app/config/settings.py
++++ b/app/config/settings.py
+@@ -47,6 +47,36 @@ class Settings(BaseSettings):
+         description="Block loopback/private/link-local/metadata targets in curl/network_scan/ping/dns/tcp",
+     )
+ 
++    # --- Dev/SRE Toolbox ---
++    toolbox_enabled: bool = Field(
++        default=True,
++        description="Mount the Dev/SRE Toolbox at /api/toolbox (Basic Auth protected)",
++    )
++    toolbox_max_request_bytes: int = Field(
++        default=1_048_576,
++        description="Maximum accepted request body size in bytes for POST /api/toolbox/runs",
++    )
++    toolbox_max_input_bytes: int = Field(
++        default=262_144,
++        description="Maximum size in bytes of a single text input passed to a tool",
++    )
++    toolbox_max_yaml_documents: int = Field(
++        default=50,
++        description="Maximum number of YAML documents accepted by k8s.manifest.inspect",
++    )
++    toolbox_max_yaml_depth: int = Field(
++        default=32,
++        description="Maximum nesting depth of a YAML document accepted by k8s.manifest.inspect",
++    )
++    toolbox_max_findings: int = Field(
++        default=200,
++        description="Maximum number of findings returned by a tool (never truncated silently)",
++    )
++    toolbox_max_diff_context_lines: int = Field(
++        default=10,
++        description="Maximum number of context lines accepted by text.diff",
++    )
++
+     # --- Redis ---
+     redis_url: str | None = Field(default=None, description="redis://host:port/db or http(s) endpoint in prod")
+     redis_host: str = "localhost"
+diff --git a/app/main.py b/app/main.py
+index 8353bf1..5cad5ec 100644
+--- a/app/main.py
++++ b/app/main.py
+@@ -178,6 +178,14 @@ def create_app() -> FastAPI:
+     app.include_router(mgmt_router)
+     app.include_router(home_router)
+ 
++    # Dev/SRE Toolbox (Basic Auth protected, additive)
++    if settings.toolbox_enabled:
++        from app.routers.toolbox import router as toolbox_router
++
++        app.include_router(toolbox_router)
++    else:
++        logger.info("Toolbox disabled (TOOLBOX_ENABLED=false)")
++
+     # Debug endpoints (can be disabled in production)
+     if settings.debug_endpoints_enabled:
+         from app.routers.debug import router as debug_router
+diff --git a/app/models/toolbox.py b/app/models/toolbox.py
+new file mode 100644
+index 0000000..0c59d00
+--- /dev/null
++++ b/app/models/toolbox.py
+@@ -0,0 +1,78 @@
++"""Pydantic models for the Dev/SRE Toolbox API (request, result, finding)."""
++
++from typing import Any, Literal
++
++from pydantic import BaseModel, Field
++
++
++class FindingLocation(BaseModel):
++    """Where a finding was observed. Every field is optional."""
++
++    document_index: int | None = None
++    resource_kind: str | None = None
++    resource_name: str | None = None
++    path: str | None = None
++
++
++class Finding(BaseModel):
++    """A single observation produced by a tool. A finding is never an HTTP error."""
++
++    code: str
++    severity: Literal["info", "warning", "error"]
++    message: str
++    location: FindingLocation = Field(default_factory=FindingLocation)
++    suggestion: str | None = None
++
++
++class FindingSummary(BaseModel):
++    """Number of findings per severity."""
++
++    info: int = 0
++    warning: int = 0
++    error: int = 0
++
++
++class ToolInfo(BaseModel):
++    """Catalogue entry for one tool."""
++
++    name: str
++    description: str
++    version: str
++    input_schema: dict[str, Any]
++
++
++class ToolListResponse(BaseModel):
++    """Response of GET /api/toolbox/tools."""
++
++    tools: list[ToolInfo]
++
++
++class ToolRunRequest(BaseModel):
++    """Request of POST /api/toolbox/runs."""
++
++    tool: str = Field(..., description="Identifier of the tool to run.")
++    input: dict[str, Any] = Field(default_factory=dict, description="Tool-specific input object.")
++
++
++class ToolRunResponse(BaseModel):
++    """Uniform result returned by POST /api/toolbox/runs.
++
++    ``status`` is the execution status of the run, ``outcome`` is the analysis
++    outcome. They are deliberately distinct.
++    """
++
++    run_id: str
++    tool: str
++    tool_version: str
++    status: Literal["completed", "failed"]
++    outcome: Literal["pass", "fail", "error"]
++    summary: FindingSummary
++    findings: list[Finding]
++    output: dict[str, Any]
++    duration_ms: int
++
++
++class ToolboxErrorResponse(BaseModel):
++    """Documented error envelope for toolbox failures."""
++
++    detail: Any
+diff --git a/app/routers/toolbox.py b/app/routers/toolbox.py
+new file mode 100644
+index 0000000..9e67745
+--- /dev/null
++++ b/app/routers/toolbox.py
+@@ -0,0 +1,179 @@
++"""Dev/SRE Toolbox router - tool catalogue and synchronous tool execution.
++
++Reuses the application's existing Basic Auth dependency, loguru structured
++logging, Prometheus route instrumentation and OpenTelemetry FastAPI
++instrumentation. CPU-bound parsing is offloaded with the same
++``loop.run_in_executor`` pattern used by ``/api/fib/{x}``.
++"""
++
++from __future__ import annotations
++
++import asyncio
++import time
++import uuid
++
++from fastapi import APIRouter, Depends, HTTPException, Request
++from loguru import logger
++from pydantic import ValidationError
++
++from app.auth import verify_credentials
++from app.config import get_settings
++from app.models.toolbox import (
++    Finding,
++    FindingLocation,
++    FindingSummary,
++    ToolInfo,
++    ToolListResponse,
++    ToolRunRequest,
++    ToolRunResponse,
++)
++from app.toolbox import registry
++from app.toolbox.base import (
++    ExecutionStatus,
++    ToolInputError,
++    ToolLimitExceeded,
++    ToolResult,
++    ToolboxLimits,
++)
++
++router = APIRouter(
++    prefix="/api/toolbox",
++    tags=["Toolbox"],
++    dependencies=[Depends(verify_credentials)],
++)
++
++
++def _limits() -> ToolboxLimits:
++    """Build the per-invocation limits from the application settings."""
++    settings = get_settings()
++    return ToolboxLimits(
++        max_input_bytes=settings.toolbox_max_input_bytes,
++        max_yaml_documents=settings.toolbox_max_yaml_documents,
++        max_yaml_depth=settings.toolbox_max_yaml_depth,
++        max_findings=settings.toolbox_max_findings,
++        max_diff_context_lines=settings.toolbox_max_diff_context_lines,
++    )
++
++
++def _to_finding(finding) -> Finding:
++    """Convert a framework-independent dataclass finding into its API model."""
++    return Finding(
++        code=finding.code,
++        severity=finding.severity.value,
++        message=finding.message,
++        location=FindingLocation(
++            document_index=finding.location.document_index,
++            resource_kind=finding.location.resource_kind,
++            resource_name=finding.location.resource_name,
++            path=finding.location.path,
++        ),
++        suggestion=finding.suggestion,
++    )
++
++
++def _to_response(run_id: str, tool, result: ToolResult, duration_ms: int) -> ToolRunResponse:
++    summary = result.summary
++    return ToolRunResponse(
++        run_id=run_id,
++        tool=tool.name,
++        tool_version=tool.version,
++        status=ExecutionStatus.COMPLETED.value,
++        outcome=result.outcome.value,
++        summary=FindingSummary(info=summary.info, warning=summary.warning, error=summary.error),
++        findings=[_to_finding(f) for f in result.findings],
++        output=result.output,
++        duration_ms=duration_ms,
++    )
++
++
++@router.get("/tools", response_model=ToolListResponse, summary="List the available toolbox tools")
++async def list_tools() -> ToolListResponse:
++    """Return identifier, description, version and input schema of every tool."""
++    return ToolListResponse(
++        tools=[
++            ToolInfo(
++                name=tool.name,
++                description=tool.description,
++                version=tool.version,
++                input_schema=tool.input_model.model_json_schema(),
++            )
++            for tool in registry.list_tools()
++        ]
++    )
++
++
++@router.post("/runs", response_model=ToolRunResponse, summary="Run one toolbox tool")
++async def run_tool(payload: ToolRunRequest, request: Request) -> ToolRunResponse:
++    """Execute one of the available tools synchronously and return a uniform result."""
++    run_id = str(uuid.uuid4())
++    settings = get_settings()
++
++    content_length = request.headers.get("content-length")
++    if content_length and content_length.isdigit() and int(content_length) > settings.toolbox_max_request_bytes:
++        raise HTTPException(
++            status_code=413,
++            detail=(
++                f"Request body is {content_length} bytes, which exceeds the configured maximum of "
++                f"{settings.toolbox_max_request_bytes} bytes"
++            ),
++        )
++
++    tool = registry.get_tool(payload.tool)
++    if tool is None:
++        raise HTTPException(status_code=404, detail="Unknown tool")
++
++    try:
++        params = tool.input_model.model_validate(payload.input)
++    except ValidationError as exc:
++        raise HTTPException(
++            status_code=422,
++            detail={
++                "error": "Invalid tool input",
++                "tool": tool.name,
++                "errors": [
++                    {"loc": list(err["loc"]), "msg": err["msg"], "type": err["type"]}
++                    for err in exc.errors()
++                ],
++            },
++        ) from exc
++
++    limits = _limits()
++    loop = asyncio.get_running_loop()
++    start = time.monotonic()
++
++    try:
++        result = await loop.run_in_executor(None, tool.execute, params, limits)
++    except ToolLimitExceeded as exc:
++        duration_ms = int((time.monotonic() - start) * 1000)
++        logger.info(
++            "toolbox run | run_id={} tool={} status={} outcome={} duration_ms={}",
++            run_id,
++            tool.name,
++            ExecutionStatus.FAILED.value,
++            "limit_exceeded",
++            duration_ms,
++        )
++        raise HTTPException(status_code=413, detail=str(exc)) from exc
++    except ToolInputError as exc:
++        raise HTTPException(status_code=422, detail=str(exc)) from exc
++    except Exception:
++        duration_ms = int((time.monotonic() - start) * 1000)
++        logger.exception(
++            "toolbox run failed | run_id={} tool={} status={} duration_ms={}",
++            run_id,
++            tool.name,
++            ExecutionStatus.FAILED.value,
++            duration_ms,
++        )
++        raise HTTPException(status_code=500, detail="Internal server error") from None
++
++    duration_ms = int((time.monotonic() - start) * 1000)
++    logger.info(
++        "toolbox run | run_id={} tool={} status={} outcome={} duration_ms={}",
++        run_id,
++        tool.name,
++        ExecutionStatus.COMPLETED.value,
++        result.outcome.value,
++        duration_ms,
++    )
++    return _to_response(run_id, tool, result, duration_ms)
+diff --git a/app/toolbox/__init__.py b/app/toolbox/__init__.py
+new file mode 100644
+index 0000000..09d1e91
+--- /dev/null
++++ b/app/toolbox/__init__.py
+@@ -0,0 +1,33 @@
++"""Dev/SRE Toolbox - framework-independent analysis tools plus an explicit registry."""
++
++from app.toolbox import registry
++from app.toolbox.base import (
++    ExecutionStatus,
++    Finding,
++    FindingLocation,
++    FindingSummary,
++    Outcome,
++    Severity,
++    Tool,
++    ToolboxLimits,
++    ToolError,
++    ToolInputError,
++    ToolLimitExceeded,
++    ToolResult,
++)
++
++__all__ = [
++    "registry",
++    "ExecutionStatus",
++    "Finding",
++    "FindingLocation",
++    "FindingSummary",
++    "Outcome",
++    "Severity",
++    "Tool",
++    "ToolboxLimits",
++    "ToolError",
++    "ToolInputError",
++    "ToolLimitExceeded",
++    "ToolResult",
++]
+diff --git a/app/toolbox/base.py b/app/toolbox/base.py
+new file mode 100644
+index 0000000..f998ae4
+--- /dev/null
++++ b/app/toolbox/base.py
+@@ -0,0 +1,146 @@
++"""Framework-independent primitives for the Dev/SRE Toolbox.
++
++Nothing in this module imports FastAPI: the analysis layer must stay testable
++on its own and reusable outside the HTTP layer.
++"""
++
++from __future__ import annotations
++
++from dataclasses import dataclass, field
++from enum import Enum
++from typing import Any, Protocol, runtime_checkable
++
++from pydantic import BaseModel
++
++
++class Severity(str, Enum):
++    """Severity of a single finding."""
++
++    INFO = "info"
++    WARNING = "warning"
++    ERROR = "error"
++
++
++class Outcome(str, Enum):
++    """Outcome of the analysis performed by a tool.
++
++    PASS  -> the tool found nothing to report.
++    FAIL  -> the tool found something to report. A finding is never an HTTP error.
++    ERROR -> the analysis could not be completed as requested (e.g. a limit was hit).
++    """
++
++    PASS = "pass"
++    FAIL = "fail"
++    ERROR = "error"
++
++
++class ExecutionStatus(str, Enum):
++    """Execution status of the run itself, kept distinct from the analysis outcome."""
++
++    COMPLETED = "completed"
++    FAILED = "failed"
++
++
++@dataclass(frozen=True)
++class FindingLocation:
++    """Where a finding was observed. Every field is optional."""
++
++    document_index: int | None = None
++    resource_kind: str | None = None
++    resource_name: str | None = None
++    path: str | None = None
++
++
++@dataclass(frozen=True)
++class Finding:
++    """A single observation produced by a tool."""
++
++    code: str
++    severity: Severity
++    message: str
++    location: FindingLocation = field(default_factory=FindingLocation)
++    suggestion: str | None = None
++
++
++@dataclass(frozen=True)
++class FindingSummary:
++    """Number of findings per severity."""
++
++    info: int = 0
++    warning: int = 0
++    error: int = 0
++
++
++def summarize(findings: list[Finding]) -> FindingSummary:
++    """Count findings by severity."""
++    return FindingSummary(
++        info=sum(1 for f in findings if f.severity is Severity.INFO),
++        warning=sum(1 for f in findings if f.severity is Severity.WARNING),
++        error=sum(1 for f in findings if f.severity is Severity.ERROR),
++    )
++
++
++@dataclass
++class ToolResult:
++    """Uniform result returned by every tool."""
++
++    outcome: Outcome
++    findings: list[Finding] = field(default_factory=list)
++    output: dict[str, Any] = field(default_factory=dict)
++
++    @property
++    def summary(self) -> FindingSummary:
++        return summarize(self.findings)
++
++
++@dataclass(frozen=True)
++class ToolboxLimits:
++    """Configurable bounds applied to every tool invocation."""
++
++    max_input_bytes: int
++    max_yaml_documents: int
++    max_yaml_depth: int
++    max_findings: int
++    max_diff_context_lines: int
++
++
++class ToolError(Exception):
++    """Base class for controlled tool failures."""
++
++
++class ToolInputError(ToolError):
++    """The input is structurally wrong for this tool (mapped to HTTP 422)."""
++
++
++class ToolLimitExceeded(ToolError):
++    """A configured limit was exceeded (mapped to HTTP 413). No silent truncation."""
++
++    def __init__(self, message: str, *, limit: str, value: int) -> None:
++        super().__init__(message)
++        self.limit = limit
++        self.value = value
++
++
++def check_text_size(text: str, limits: ToolboxLimits, *, field_name: str) -> None:
++    """Reject a text input larger than the configured maximum, with a specific message."""
++    size = len(text.encode("utf-8"))
++    if size > limits.max_input_bytes:
++        raise ToolLimitExceeded(
++            f"{field_name} is {size} bytes, which exceeds the configured maximum of "
++            f"{limits.max_input_bytes} bytes",
++            limit="max_input_bytes",
++            value=limits.max_input_bytes,
++        )
++
++
++@runtime_checkable
++class Tool(Protocol):
++    """Common contract every toolbox tool implements."""
++
++    name: str
++    version: str
++    description: str
++    input_model: type[BaseModel]
++
++    def execute(self, params: BaseModel, limits: ToolboxLimits) -> ToolResult:
++        ...
+diff --git a/app/toolbox/registry.py b/app/toolbox/registry.py
+new file mode 100644
+index 0000000..6c756f4
+--- /dev/null
++++ b/app/toolbox/registry.py
+@@ -0,0 +1,40 @@
++"""Explicit registry of the available toolbox tools.
++
++The registry is a plain dictionary populated at import time from a static list
++of modules. There is no dynamic import, no ``eval``/``exec`` and no shell: a
++client can never make the process load or run anything.
++"""
++
++from __future__ import annotations
++
++from app.toolbox.base import Tool
++from app.toolbox.tools import json_validate, k8s_manifest_inspect, text_diff
++
++_REGISTRY: dict[str, Tool] = {}
++
++
++def register(tool: Tool) -> None:
++    """Register a tool. Raises ValueError on an empty or duplicate identifier."""
++    if not tool.name:
++        raise ValueError("tool name must not be empty")
++    if tool.name in _REGISTRY:
++        raise ValueError(f"duplicate tool name: {tool.name}")
++    _REGISTRY[tool.name] = tool
++
++
++def get_tool(name: str) -> Tool | None:
++    """Return the tool with this identifier, or None when it is unknown."""
++    return _REGISTRY.get(name)
++
++
++def list_tools() -> list[Tool]:
++    """Return the registered tools sorted by identifier (deterministic order)."""
++    return [_REGISTRY[name] for name in sorted(_REGISTRY)]
++
++
++def _register_builtin_tools() -> None:
++    for tool in (json_validate.TOOL, text_diff.TOOL, k8s_manifest_inspect.TOOL):
++        register(tool)
++
++
++_register_builtin_tools()
+diff --git a/app/toolbox/tools/__init__.py b/app/toolbox/tools/__init__.py
+new file mode 100644
+index 0000000..fee93a7
+--- /dev/null
++++ b/app/toolbox/tools/__init__.py
+@@ -0,0 +1,9 @@
++"""Tool implementations.
++
++Importing this package imports every tool module, so the registry can build
++itself from a static list of modules (no dynamic import).
++"""
++
++from app.toolbox.tools import json_validate, k8s_manifest_inspect, text_diff
++
++__all__ = ["json_validate", "k8s_manifest_inspect", "text_diff"]
+diff --git a/app/toolbox/tools/json_validate.py b/app/toolbox/tools/json_validate.py
+new file mode 100644
+index 0000000..b72fdbf
+--- /dev/null
++++ b/app/toolbox/tools/json_validate.py
+@@ -0,0 +1,72 @@
++"""Tool ``json.validate`` - syntactic validation of a JSON document."""
++
++from __future__ import annotations
++
++import json
++
++from pydantic import BaseModel, Field
++
++from app.toolbox.base import (
++    Finding,
++    FindingLocation,
++    Outcome,
++    Severity,
++    ToolResult,
++    ToolboxLimits,
++    check_text_size,
++)
++
++
++class JsonValidateInput(BaseModel):
++    """Input of ``json.validate``.
++
++    ``text`` is always treated as literal JSON text: URLs and file paths are
++    never resolved, fetched or opened.
++    """
++
++    text: str = Field(..., description="JSON document as text. URLs and file paths are not resolved.")
++
++
++class JsonValidateTool:
++    """Validate syntax and return the parsed value or the error position."""
++
++    name = "json.validate"
++    version = "1.0.0"
++    description = (
++        "Validate the syntax of a JSON document supplied as text and return the parsed value, "
++        "or an error with the position of the first syntax problem. URLs and file paths are not accepted."
++    )
++    input_model = JsonValidateInput
++
++    def execute(self, params: JsonValidateInput, limits: ToolboxLimits) -> ToolResult:
++        check_text_size(params.text, limits, field_name="text")
++
++        try:
++            value = json.loads(params.text)
++        except json.JSONDecodeError as exc:
++            finding = Finding(
++                code="JSON_INVALID",
++                severity=Severity.ERROR,
++                message=f"Invalid JSON: {exc.msg}",
++                location=FindingLocation(path=f"line {exc.lineno}, column {exc.colno}"),
++                suggestion="Fix the syntax at the reported line and column and run the tool again.",
++            )
++            return ToolResult(
++                outcome=Outcome.FAIL,
++                findings=[finding],
++                output={
++                    "valid": False,
++                    "line": exc.lineno,
++                    "column": exc.colno,
++                    "position": exc.pos,
++                },
++            )
++
++        return ToolResult(
++            outcome=Outcome.PASS,
++            findings=[],
++            output={"valid": True, "value": value},
++        )
++
++
++TOOL = JsonValidateTool()
+diff --git a/app/toolbox/tools/k8s_manifest_inspect.py b/app/toolbox/tools/k8s_manifest_inspect.py
+new file mode 100644
+index 0000000..39313fd
+--- /dev/null
++++ b/app/toolbox/tools/k8s_manifest_inspect.py
+@@ -0,0 +1,473 @@
++"""Tool ``k8s.manifest.inspect`` - static, offline checks on Kubernetes manifests.
++
++The checks are deliberately narrow: they are NOT a complete Kubernetes
++validation and NOT a security certification. They never contact a cluster and
++never read a file or a URL.
++"""
++
++from __future__ import annotations
++
++from typing import Any
++
++import yaml
++from pydantic import BaseModel, Field
++
++from app.toolbox.base import (
++    Finding,
++    FindingLocation,
++    Outcome,
++    Severity,
++    ToolLimitExceeded,
++    ToolResult,
++    ToolboxLimits,
++    check_text_size,
++)
++
++SUPPORTED_KINDS = ("Deployment", "StatefulSet", "DaemonSet")
++
++FINDINGS_LIMIT_CODE = "TOOLBOX_FINDINGS_LIMIT_EXCEEDED"
++
++DISCLAIMER = (
++    "Static, offline checks only. This is not a complete Kubernetes validation "
++    "and not a security certification."
++)
++
++
++class K8sManifestInspectInput(BaseModel):
++    """Input of ``k8s.manifest.inspect``."""
++
++    manifest: str = Field(..., description="Kubernetes YAML manifest, possibly multi-document.")
++
++
++class _NoAliasSafeLoader(yaml.SafeLoader):
++    """SafeLoader that refuses YAML aliases.
++
++    Aliases make it possible to build a small document that expands to a huge
++    object graph (a "billion laughs" bomb). The toolbox never needs them, so
++    they are rejected instead of being expanded.
++    """
++
++    def compose_node(self, parent, index):  # type: ignore[no-untyped-def]
++        if self.check_event(yaml.events.AliasEvent):
++            event = self.peek_event()
++            raise yaml.constructor.ConstructorError(
++                None,
++                None,
++                "YAML aliases are not supported by this tool",
++                event.start_mark,
++            )
++        return super().compose_node(parent, index)
++
++
++def _max_depth(value: Any, current: int = 0) -> int:
++    """Maximum nesting depth of a parsed YAML value."""
++    if isinstance(value, dict):
++        if not value:
++            return current
++        return max(_max_depth(item, current + 1) for item in value.values())
++    if isinstance(value, list):
++        if not value:
++            return current
++        return max(_max_depth(item, current + 1) for item in value)
++    return current
++
++
++def _pod_spec(document: dict) -> dict | None:
++    """Return ``spec.template.spec`` of a workload, or None when it is absent."""
++    spec = document.get("spec")
++    if not isinstance(spec, dict):
++        return None
++    template = spec.get("template")
++    if not isinstance(template, dict):
++        return None
++    pod_spec = template.get("spec")
++    if not isinstance(pod_spec, dict):
++        return None
++    return pod_spec
++
++
++def _resource_name(document: dict) -> str | None:
++    metadata = document.get("metadata")
++    if not isinstance(metadata, dict):
++        return None
++    name = metadata.get("name")
++    return name if isinstance(name, str) and name else None
++
++
++class K8sManifestInspectTool:
++    """Inspect Deployment / StatefulSet / DaemonSet manifests without a cluster."""
++
++    name = "k8s.manifest.inspect"
++    version = "1.0.0"
++    description = (
++        "Run static, offline checks on a Kubernetes YAML manifest (multi-document supported) "
++        "for Deployment, StatefulSet and DaemonSet: resource requests/limits, probes, image tags, "
++        "privileged containers, privilege escalation and non-root execution. "
++        "Not a complete Kubernetes validation and not a security certification."
++    )
++    input_model = K8sManifestInspectInput
++
++    def execute(self, params: K8sManifestInspectInput, limits: ToolboxLimits) -> ToolResult:
++        check_text_size(params.manifest, limits, field_name="manifest")
++
++        try:
++            documents = list(yaml.load_all(params.manifest, Loader=_NoAliasSafeLoader))
++        except yaml.YAMLError as exc:
++            return ToolResult(
++                outcome=Outcome.FAIL,
++                findings=[
++                    Finding(
++                        code="K8S_YAML_INVALID",
++                        severity=Severity.ERROR,
++                        message=f"Invalid YAML: {exc}",
++                        location=FindingLocation(path="manifest"),
++                        suggestion="Fix the YAML syntax and run the tool again.",
++                    )
++                ],
++                output={"valid_yaml": False, "documents": 0, "disclaimer": DISCLAIMER},
++            )
++        except RecursionError:
++            raise ToolLimitExceeded(
++                "manifest nesting is too deep to parse safely",
++                limit="max_yaml_depth",
++                value=limits.max_yaml_depth,
++            ) from None
++
++        if len(documents) > limits.max_yaml_documents:
++            raise ToolLimitExceeded(
++                f"manifest contains {len(documents)} YAML documents, which exceeds the configured "
++                f"maximum of {limits.max_yaml_documents}",
++                limit="max_yaml_documents",
++                value=limits.max_yaml_documents,
++            )
++
++        findings: list[Finding] = []
++        inspected = 0
++
++        for index, document in enumerate(documents):
++            if document is None:
++                continue
++            try:
++                depth = _max_depth(document)
++            except RecursionError:
++                raise ToolLimitExceeded(
++                    f"document {index} nests too deeply to inspect safely",
++                    limit="max_yaml_depth",
++                    value=limits.max_yaml_depth,
++                ) from None
++            if depth > limits.max_yaml_depth:
++                raise ToolLimitExceeded(
++                    f"document {index} nests {depth} levels, which exceeds the configured maximum "
++                    f"of {limits.max_yaml_depth}",
++                    limit="max_yaml_depth",
++                    value=limits.max_yaml_depth,
++                )
++            if not isinstance(document, dict):
++                findings.append(
++                    Finding(
++                        code="K8S_DOCUMENT_NOT_A_MAPPING",
++                        severity=Severity.WARNING,
++                        message="The YAML document is not a mapping and cannot be inspected as a Kubernetes resource.",
++                        location=FindingLocation(document_index=index),
++                        suggestion="Provide a Kubernetes resource as a YAML mapping.",
++                    )
++                )
++                continue
++            findings.extend(self._inspect_document(document, index))
++            inspected += 1
++
++        total = len(findings)
++        limit_exceeded = total > limits.max_findings
++        if limit_exceeded:
++            keep = max(0, limits.max_findings - 1)
++            findings = findings[:keep]
++            findings.append(
++                Finding(
++                    code=FINDINGS_LIMIT_CODE,
++                    severity=Severity.ERROR,
++                    message=(
++                        f"The analysis produced {total} findings, which exceeds the configured maximum of "
++                        f"{limits.max_findings}. The list is truncated to the first {keep} findings plus "
++                        "this notice; nothing is dropped silently."
++                    ),
++                    suggestion="Narrow the manifest or raise TOOLBOX_MAX_FINDINGS.",
++                )
++            )
++
++        if limit_exceeded:
++            outcome = Outcome.ERROR
++        elif any(f.severity in (Severity.WARNING, Severity.ERROR) for f in findings):
++            outcome = Outcome.FAIL
++        else:
++            outcome = Outcome.PASS
++
++        return ToolResult(
++            outcome=outcome,
++            findings=findings,
++            output={
++                "documents": len(documents),
++                "resources_inspected": inspected,
++                "supported_kinds": list(SUPPORTED_KINDS),
++                "limit_exceeded": limit_exceeded,
++                "findings_total": total,
++                "findings_returned": len(findings),
++                "disclaimer": DISCLAIMER,
++            },
++        )
++
++    # --- per document -------------------------------------------------
++
++    def _inspect_document(self, document: dict, index: int) -> list[Finding]:
++        kind = document.get("kind")
++        name = _resource_name(document)
++
++        if not isinstance(kind, str) or not kind:
++            return [
++                Finding(
++                    code="K8S_MISSING_KIND",
++                    severity=Severity.WARNING,
++                    message="The document has no 'kind' field, so it cannot be inspected.",
++                    location=FindingLocation(document_index=index, resource_name=name, path="kind"),
++                    suggestion="Add the 'kind' field of the Kubernetes resource.",
++                )
++            ]
++
++        if kind not in SUPPORTED_KINDS:
++            return [
++                Finding(
++                    code="K8S_UNSUPPORTED_KIND",
++                    severity=Severity.INFO,
++                    message=f"Kind '{kind}' is not inspected by this tool.",
++                    location=FindingLocation(
++                        document_index=index, resource_kind=kind, resource_name=name, path="kind"
++                    ),
++                    suggestion=f"Supported kinds: {', '.join(SUPPORTED_KINDS)}.",
++                )
++            ]
++
++        pod_spec = _pod_spec(document)
++        if pod_spec is None:
++            return [
++                Finding(
++                    code="K8S_MISSING_POD_SPEC",
++                    severity=Severity.WARNING,
++                    message=f"{kind} '{name or '<unnamed>'}' has no spec.template.spec to inspect.",
++                    location=FindingLocation(
++                        document_index=index,
++                        resource_kind=kind,
++                        resource_name=name,
++                        path="spec.template.spec",
++                    ),
++                    suggestion="Provide a workload template with a pod spec.",
++                )
++            ]
++
++        findings: list[Finding] = []
++
++        pod_security = pod_spec.get("securityContext")
++        pod_security = pod_security if isinstance(pod_security, dict) else {}
++        pod_run_as_non_root = pod_security.get("runAsNonRoot") is True
++
++        containers = pod_spec.get("containers")
++        if not isinstance(containers, list) or not containers:
++            findings.append(
++                Finding(
++                    code="K8S_NO_CONTAINERS",
++                    severity=Severity.WARNING,
++                    message=f"{kind} '{name or '<unnamed>'}' declares no containers.",
++                    location=FindingLocation(
++                        document_index=index,
++                        resource_kind=kind,
++                        resource_name=name,
++                        path="spec.template.spec.containers",
++                    ),
++                    suggestion="Declare at least one container.",
++                )
++            )
++        else:
++            for position, container in enumerate(containers):
++                findings.extend(
++                    self._inspect_container(
++                        container,
++                        index,
++                        kind,
++                        name,
++                        f"spec.template.spec.containers[{position}]",
++                        pod_run_as_non_root,
++                        is_init=False,
++                    )
++                )
++
++        init_containers = pod_spec.get("initContainers")
++        if isinstance(init_containers, list):
++            for position, container in enumerate(init_containers):
++                findings.extend(
++                    self._inspect_container(
++                        container,
++                        index,
++                        kind,
++                        name,
++                        f"spec.template.spec.initContainers[{position}]",
++                        pod_run_as_non_root,
++                        is_init=True,
++                    )
++                )
++
++        return findings
++
++    # --- per container ------------------------------------------------
++
++    def _inspect_container(
++        self,
++        container: Any,
++        index: int,
++        kind: str,
++        name: str | None,
++        base_path: str,
++        pod_run_as_non_root: bool,
++        *,
++        is_init: bool,
++    ) -> list[Finding]:
++        if not isinstance(container, dict):
++            return [
++                Finding(
++                    code="K8S_INVALID_CONTAINER",
++                    severity=Severity.WARNING,
++                    message="The container entry is not a mapping and cannot be inspected.",
++                    location=FindingLocation(
++                        document_index=index, resource_kind=kind, resource_name=name, path=base_path
++                    ),
++                    suggestion="Provide the container as a YAML mapping.",
++                )
++            ]
++
++        findings: list[Finding] = []
++        raw_name = container.get("name")
++        label = raw_name if isinstance(raw_name, str) and raw_name else "<unnamed>"
++        role = "Init container" if is_init else "Container"
++
++        def add(code: str, severity: Severity, message: str, path: str, suggestion: str) -> None:
++            findings.append(
++                Finding(
++                    code=code,
++                    severity=severity,
++                    message=message,
++                    location=FindingLocation(
++                        document_index=index, resource_kind=kind, resource_name=name, path=path
++                    ),
++                    suggestion=suggestion,
++                )
++            )
++
++        # --- image ---
++        image = container.get("image")
++        if not isinstance(image, str) or not image.strip():
++            add(
++                "K8S_IMAGE_MISSING",
++                Severity.WARNING,
++                f"{role} '{label}' has no image.",
++                f"{base_path}.image",
++                "Set an explicit image reference.",
++            )
++        elif "@" not in image:
++            last_segment = image.rsplit("/", 1)[-1]
++            if ":" not in last_segment:
++                add(
++                    "K8S_IMAGE_TAG_MISSING",
++                    Severity.WARNING,
++                    f"{role} '{label}' uses image '{image}' without a tag.",
++                    f"{base_path}.image",
++                    "Pin an explicit tag or a digest.",
++                )
++            elif last_segment.rsplit(":", 1)[1] == "latest":
++                add(
++                    "K8S_IMAGE_TAG_LATEST",
++                    Severity.WARNING,
++                    f"{role} '{label}' uses image '{image}' with the 'latest' tag.",
++                    f"{base_path}.image",
++                    "Pin a specific version or a digest instead of 'latest'.",
++                )
++
++        # --- resources ---
++        resources = container.get("resources")
++        resources = resources if isinstance(resources, dict) else {}
++        if not resources.get("requests"):
++            add(
++                "K8S_CONTAINER_MISSING_REQUESTS",
++                Severity.WARNING,
++                f"{role} '{label}' declares no resource requests.",
++                f"{base_path}.resources.requests",
++                "Declare CPU and memory requests.",
++            )
++        if not resources.get("limits"):
++            add(
++                "K8S_CONTAINER_MISSING_LIMITS",
++                Severity.WARNING,
++                f"{role} '{label}' declares no resource limits.",
++                f"{base_path}.resources.limits",
++                "Declare CPU and memory limits.",
++            )
++
++        # --- probes: regular containers only, never init containers ---
++        if not is_init:
++            if not container.get("readinessProbe"):
++                add(
++                    "K8S_MISSING_READINESS_PROBE",
++                    Severity.WARNING,
++                    f"Container '{label}' has no readinessProbe.",
++                    f"{base_path}.readinessProbe",
++                    "Add a readinessProbe so traffic only reaches ready pods.",
++                )
++            if not container.get("livenessProbe"):
++                add(
++                    "K8S_MISSING_LIVENESS_PROBE",
++                    Severity.WARNING,
++                    f"Container '{label}' has no livenessProbe.",
++                    f"{base_path}.livenessProbe",
++                    "Add a livenessProbe so a stuck process is restarted.",
++                )
++
++        # --- security context ---
++        security = container.get("securityContext")
++        security = security if isinstance(security, dict) else {}
++
++        if security.get("privileged") is True:
++            add(
++                "K8S_PRIVILEGED_CONTAINER",
++                Severity.ERROR,
++                f"{role} '{label}' is configured as privileged.",
++                f"{base_path}.securityContext.privileged",
++                "Disable privileged unless it is explicitly required.",
++            )
++
++        escalation = security.get("allowPrivilegeEscalation")
++        if escalation is True:
++            add(
++                "K8S_ALLOW_PRIVILEGE_ESCALATION_ENABLED",
++                Severity.ERROR,
++                f"{role} '{label}' explicitly allows privilege escalation.",
++                f"{base_path}.securityContext.allowPrivilegeEscalation",
++                "Set allowPrivilegeEscalation: false.",
++            )
++        elif escalation is not False:
++            add(
++                "K8S_ALLOW_PRIVILEGE_ESCALATION_NOT_DISABLED",
++                Severity.WARNING,
++                f"{role} '{label}' does not explicitly disable privilege escalation.",
++                f"{base_path}.securityContext.allowPrivilegeEscalation",
++                "Set allowPrivilegeEscalation: false.",
++            )
++
++        if not pod_run_as_non_root and security.get("runAsNonRoot") is not True:
++            add(
++                "K8S_RUN_AS_NON_ROOT_NOT_SET",
++                Severity.WARNING,
++                f"{role} '{label}' does not explicitly require non-root execution.",
++                f"{base_path}.securityContext.runAsNonRoot",
++                "Set runAsNonRoot: true at pod or container level.",
++            )
++
++        return findings
++
++
++TOOL = K8sManifestInspectTool()
+diff --git a/app/toolbox/tools/text_diff.py b/app/toolbox/tools/text_diff.py
+new file mode 100644
+index 0000000..d1899f9
+--- /dev/null
++++ b/app/toolbox/tools/text_diff.py
+@@ -0,0 +1,79 @@
++"""Tool ``text.diff`` - unified diff between two strings."""
++
++from __future__ import annotations
++
++import difflib
++
++from pydantic import BaseModel, Field
++
++from app.toolbox.base import (
++    Outcome,
++    ToolLimitExceeded,
++    ToolResult,
++    ToolboxLimits,
++    check_text_size,
++)
++
++
++class TextDiffInput(BaseModel):
++    """Input of ``text.diff``."""
++
++    left: str = Field(..., description="Original text.")
++    right: str = Field(..., description="Modified text.")
++    context_lines: int = Field(
++        default=3,
++        ge=0,
++        description=(
++            "Number of context lines around each change. Bounded by "
++            "TOOLBOX_MAX_DIFF_CONTEXT_LINES; a larger value is rejected, never truncated."
++        ),
++    )
++
++
++class TextDiffTool:
++    """Return a unified diff between two strings."""
++
++    name = "text.diff"
++    version = "1.0.0"
++    description = (
++        "Return a unified diff between two strings. The number of context lines is configurable "
++        "within the configured maximum."
++    )
++    input_model = TextDiffInput
++
++    def execute(self, params: TextDiffInput, limits: ToolboxLimits) -> ToolResult:
++        check_text_size(params.left, limits, field_name="left")
++        check_text_size(params.right, limits, field_name="right")
++
++        if params.context_lines > limits.max_diff_context_lines:
++            raise ToolLimitExceeded(
++                f"context_lines={params.context_lines} exceeds the configured maximum of "
++                f"{limits.max_diff_context_lines}",
++                limit="max_diff_context_lines",
++                value=limits.max_diff_context_lines,
++            )
++
++        diff_lines = list(
++            difflib.unified_diff(
++                params.left.splitlines(),
++                params.right.splitlines(),
++                fromfile="left",
++                tofile="right",
++                n=params.context_lines,
++                lineterm="",
++            )
++        )
++        identical = not diff_lines
++
++        return ToolResult(
++            outcome=Outcome.PASS if identical else Outcome.FAIL,
++            findings=[],
++            output={
++                "identical": identical,
++                "context_lines": params.context_lines,
++                "diff": "\n".join(diff_lines),
++            },
++        )
++
++
++TOOL = TextDiffTool()
+diff --git a/docs/14-dev-sre-toolbox.md b/docs/14-dev-sre-toolbox.md
+new file mode 100644
+index 0000000..9de5583
+--- /dev/null
++++ b/docs/14-dev-sre-toolbox.md
+@@ -0,0 +1,360 @@
++# 14 — Dev/SRE Toolbox
++
++Audience: Developers, SRE. Status: implemented (MVP).
++
++## How to read this document (Diátaxis)
++
++This document deliberately keeps the four Diátaxis modes in separate, linkable
++sections so each can be consumed on its own:
++
++| Mode | Section |
++|------|---------|
++| Tutorial | [Try it: a guided walkthrough](#try-it-a-guided-walkthrough) |
++| How-to | [Adding a new tool](#adding-a-new-tool) |
++| Reference | [Endpoints](#endpoints), [Result contract](#result-contract), [Configuration and limits](#configuration-and-limits), [Kubernetes checks](#kubernetes-checks--what-they-do-and-do-not-do) |
++| Explanation | [What it is](#what-it-is), [Architecture note](#architecture-note) |
++
++The reference sections are the ones linked from the OpenAPI operation descriptions.
++
++## What it is
++
++The Dev/SRE Toolbox is a modular feature **inside the existing FastAPI application**
++(no separate service, no new infrastructure). It exposes a small catalogue of
++technical utilities over the API and returns a uniform, typed result.
++
++Three tools ship in this MVP:
++
++| Tool | Version | Purpose |
++|------|---------|---------|
++| `json.validate` | 1.0.0 | Syntactic validation of a JSON document supplied as text; returns the parsed value or the error position. |
++| `text.diff` | 1.0.0 | Unified diff between two strings, with a configurable number of context lines. |
++| `k8s.manifest.inspect` | 1.0.0 | Static, offline checks on Kubernetes YAML manifests (Deployment, StatefulSet, DaemonSet). |
++
++All checks are **local, bounded and synchronous**. No network call, no Kubernetes
++cluster, no external credential, no queue, no persistence.
++
++## Endpoints
++
++The prefix follows the repository convention (a single `/api` prefix; the app has no
++versioned `/v1` segment anywhere), so the mandate's `/api/v1/toolbox` is mounted as
++`/api/toolbox`.
++
++Both endpoints require the application's existing HTTP Basic Auth
++(`app.auth.verify_credentials`, the same dependency used by `/api/debug/*` and
++`/api/mgmt/threaddump`). **Every example below carries the credentials**, so it works
++as written; without them the call returns `401`.
++
++### `GET /api/toolbox/tools`
++
++Returns the catalogue: identifier, description, version and JSON input schema of every
++tool, sorted by identifier (deterministic order).
++
++bash
++curl -s -u admin:password http://localhost:8000/api/toolbox/tools | python3 -m json.tool
++
++
++
++{
++  "tools": [
++    {
++      "name": "json.validate",
++      "description": "Validate the syntax of a JSON document supplied as text ...",
++      "version": "1.0.0",
++      "input_schema": {"properties": {"text": {"title": "Text", "type": "string"}}, "required": ["text"], "title": "JsonValidateInput", "type": "object"}
++    },
++    {
++      "name": "k8s.manifest.inspect",
++      "description": "Run static, offline checks on a Kubernetes YAML manifest ...",
++      "version": "1.0.0",
++      "input_schema": {"properties": {"manifest": {"title": "Manifest", "type": "string"}}, "required": ["manifest"], "title": "K8sManifestInspectInput", "type": "object"}
++    },
++    {
++      "name": "text.diff",
++      "description": "Return a unified diff between two strings ...",
++      "version": "1.0.0",
++      "input_schema": {"properties": {"left": {"title": "Left", "type": "string"}, "right": {"title": "Right", "type": "string"}, "context_lines": {"default": 3, "minimum": 0, "title": "Context Lines", "type": "integer"}}, "required": ["left", "right"], "title": "TextDiffInput", "type": "object"}
++    }
++  ]
++}
++
++
++### `POST /api/toolbox/runs`
++
++Runs one tool and returns HTTP 200 with the result and a `run_id`.
++
++bash
++curl -s -u admin:password -X POST http://localhost:8000/api/toolbox/runs \
++  -H "Content-Type: application/json" \
++  -d '{"tool": "json.validate", "input": {"text": "{\"a\": 1}"}}' | python3 -m json.tool
++
++
++
++{
++  "run_id": "0f0a1c1e-6f1a-4a1e-9a1e-2b0f0a1c1e6f",
++  "tool": "json.validate",
++  "tool_version": "1.0.0",
++  "status": "completed",
++  "outcome": "pass",
++  "summary": {"info": 0, "warning": 0, "error": 0},
++  "findings": [],
++  "output": {"valid": true, "value": {"a": 1}},
++  "duration_ms": 1
++}
++
++
++Invalid JSON is **not** an HTTP error: it is a negative analysis result.
++
++bash
++curl -s -u admin:password -X POST http://localhost:8000/api/toolbox/runs \
++  -H "Content-Type: application/json" \
++  -d '{"tool": "json.validate", "input": {"text": "{\"a\": }"}}' | python3 -m json.tool
++
++
++json
++{
++  "run_id": "...",
++  "tool": "json.validate",
++  "tool_version": "1.0.0",
++  "status": "completed",
++  "outcome": "fail",
++  "summary": {"info": 0, "warning": 0, "error": 1},
++  "findings": [
++    {
++      "code": "JSON_INVALID",
++      "severity": "error",
++      "message": "Invalid JSON: Expecting value",
++      "location": {"document_index": null, "resource_kind": null, "resource_name": null, "path": "line 1, column 7"},
++      "suggestion": "Fix the syntax at the reported line and column and run the tool again."
++    }
++  ],
++  "output": {"valid": false, "line": 1, "column": 7, "position": 6},
++  "duration_ms": 1
++}
++
++
++`text.diff`:
++
++bash
++curl -s -u admin:password -X POST http://localhost:8000/api/toolbox/runs \
++  -H "Content-Type: application/json" \
++  -d '{"tool": "text.diff", "input": {"left": "a\nb\nc", "right": "a\nB\nc", "context_lines": 1}}' | python3 -m json.tool
++
++
++
++{
++  "run_id": "...",
++  "tool": "text.diff",
++  "tool_version": "1.0.0",
++  "status": "completed",
++  "outcome": "fail",
++  "summary": {"info": 0, "warning": 0, "error": 0},
++  "findings": [],
++  "output": {"identical": false, "context_lines": 1, "diff": "--- left\n+++ right\n@@ -1,3 +1,3 @@\n a\n-b\n+B\n c"},
++  "duration_ms": 1
++}
++
++
++`k8s.manifest.inspect`:
++
++bash
++curl -s -u admin:password -X POST http://localhost:8000/api/toolbox/runs \
++  -H "Content-Type: application/json" \
++  -d '{"tool": "k8s.manifest.inspect", "input": {"manifest": "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: example\nspec:\n  template:\n    spec:\n      containers:\n        - name: app\n          image: nginx:latest\n          securityContext:\n            privileged: true\n"}}' | python3 -m json.tool
++
++
++
++{
++  "run_id": "...",
++  "tool": "k8s.manifest.inspect",
++  "tool_version": "1.0.0",
++  "status": "completed",
++  "outcome": "fail",
++  "summary": {"info": 0, "warning": 5, "error": 1},
++  "findings": [
++    {
++      "code": "K8S_PRIVILEGED_CONTAINER",
++      "severity": "error",
++      "message": "Container 'app' is configured as privileged.",
++      "location": {"document_index": 0, "resource_kind": "Deployment", "resource_name": "example", "path": "spec.template.spec.containers[0].securityContext.privileged"},
++      "suggestion": "Disable privileged unless it is explicitly required."
++    }
++  ],
++  "output": {"documents": 1, "resources_inspected": 1, "supported_kinds": ["Deployment", "StatefulSet", "DaemonSet"], "limit_exceeded": false, "findings_total": 6, "findings_returned": 6, "disclaimer": "Static, offline checks only. This is not a complete Kubernetes validation and not a security certification."},
++  "duration_ms": 3
++}
++
++
++## Try it: a guided walkthrough
++
++1. Start the app: `uvicorn app.main:app --port 8000` (or `docker compose up -d`).
++2. List the catalogue with the command in [`GET /api/toolbox/tools`](#get-apitoolboxtools).
++3. Run `json.validate` with a valid document, then with a broken one, and compare the
++   `outcome` field: both return HTTP 200.
++4. Run `text.diff` on two short strings and read the unified diff in `output.diff`.
++5. Run `k8s.manifest.inspect` on the sample manifest above and read the findings.
++
++## Result contract
++
++| Field | Meaning |
++|-------|---------|
++| `run_id` | UUID generated per request. Correlation of response, logs and tracing only: it is not persisted and there is no `GET /runs/{id}`. |
++| `tool`, `tool_version` | Identifier and version of the tool that ran. |
++| `status` | Execution status of the run: `completed` or `failed`. |
++| `outcome` | Analysis outcome: `pass`, `fail` or `error`. A finding is never an HTTP error. |
++| `summary` | Number of findings per severity (`info`, `warning`, `error`). |
++| `findings` | List of `{code, severity, message, location, suggestion}`. |
++| `output` | Tool-specific structured output. |
++| `duration_ms` | Wall-clock duration of the analysis. |
++
++Four things are kept distinct:
++
++1. **execution status** (`status`);
++2. **analysis outcome** (`outcome`);
++3. **request validation errors** — FastAPI's own 422 for a body that does not match
++   `ToolRunRequest`, or a 422 with a typed `detail` when `input` does not match the
++   tool's input model;
++4. **unexpected internal errors** — HTTP 500 with `{"detail": "Internal server error"}`,
++   sanitized by the existing `ErrorInjectionMiddleware`; no stack trace, no module path,
++   no exception class name is returned.
++
++Syntactically invalid input (bad JSON, bad YAML) produces a negative analysis result
++(`outcome: "fail"` with a finding), because that is the purpose of the tool. A
++structurally wrong *request* follows the application's validation error handling.
++
++### Error channels (exact status and body)
++
++| Situation | Status | Body |
++|-----------|--------|------|
++| Missing or wrong Basic Auth | `401` | `{"detail": "Not authenticated"}` |
++| Body does not match `ToolRunRequest` | `422` | FastAPI validation envelope |
++| `input` does not match the tool's input model | `422` | `{"detail": {"error": "Invalid tool input", "tool": ..., "errors": [...]}}` |
++| Unknown tool id | `404` | `{"error": "Not found"}` — the app-wide 404 handler rewrites the body, so the caller **cannot** distinguish "unknown tool" from any other 404 by body. |
++| Input or request over a limit | `413` | `{"detail": "<reason with observed and maximum value>"}` |
++| Unexpected internal error | `500` | `{"detail": "Internal server error"}` |
++
++## Configuration and limits
++
++All limits are Pydantic Settings fields in `app/config/settings.py`, driven by
++environment variables like the rest of the configuration.
++
++| Variable | Default | Applies to |
++|----------|---------|------------|
++| `TOOLBOX_ENABLED` | `true` | Mounts `/api/toolbox` in `create_app()`. Set to `false` to remove the routes entirely. |
++| `TOOLBOX_MAX_REQUEST_BYTES` | `1048576` | `Content-Length` of `POST /api/toolbox/runs`. |
++| `TOOLBOX_MAX_INPUT_BYTES` | `262144` | Size of a single text input (`text`, `left`, `right`, `manifest`). |
++| `TOOLBOX_MAX_YAML_DOCUMENTS` | `50` | Number of YAML documents in a manifest. |
++| `TOOLBOX_MAX_YAML_DEPTH` | `32` | Nesting depth of a YAML document. |
++| `TOOLBOX_MAX_FINDINGS` | `200` | Number of findings returned by a tool. |
++| `TOOLBOX_MAX_DIFF_CONTEXT_LINES` | `10` | `context_lines` accepted by `text.diff`. |
++
++> Note: these variables are read from the environment / `.env` like every other
++> setting. They are not yet listed in `.env.example`; add them there when the file is
++> next touched (that file is outside the documentation write scope of this change).
++
++### What happens when a limit is reached — no silent truncation
++
++* **Request body too large** → HTTP **413** with a message stating the observed size and
++  the configured maximum.
++* **Single input too large** → HTTP **413** with the same kind of message.
++* **Too many YAML documents** → HTTP **413**.
++* **YAML document too deep** → HTTP **413**.
++* **`context_lines` above the maximum** → HTTP **413**.
++* **More findings than `TOOLBOX_MAX_FINDINGS`** → the run still returns HTTP 200, but
++  `outcome` is `"error"`, `output.limit_exceeded` is `true`, `output.findings_total`
++  reports how many findings were produced, and the list ends with an explicit
++  `TOOLBOX_FINDINGS_LIMIT_EXCEEDED` finding that says how many were kept. Nothing is
++  dropped silently.
++
++HTTP 413 is used deliberately instead of 400: the application-wide 400 handler in
++`app/main.py` rewrites the body to `{"error": "Bad request"}` and would hide the reason.
++
++## Kubernetes checks — what they do and do not do
++
++`k8s.manifest.inspect` parses the manifest with `yaml.safe_load_all` through a
++`SafeLoader` subclass that additionally **rejects YAML aliases** (a small document can
++otherwise expand into a huge object graph). It never contacts a cluster, never reads a
++file or a URL, and never constructs arbitrary Python objects.
++
++Supported kinds: **Deployment, StatefulSet, DaemonSet**. Any other kind produces an
++`info` finding (`K8S_UNSUPPORTED_KIND`) and is not inspected.
++
++Checks, per container:
++
++| Code | Severity | Condition |
++|------|----------|-----------|
++| `K8S_CONTAINER_MISSING_REQUESTS` | warning | no `resources.requests` |
++| `K8S_CONTAINER_MISSING_LIMITS` | warning | no `resources.limits` |
++| `K8S_MISSING_READINESS_PROBE` | warning | no `readinessProbe` (regular containers only) |
++| `K8S_MISSING_LIVENESS_PROBE` | warning | no `livenessProbe` (regular containers only) |
++| `K8S_IMAGE_MISSING` | warning | no image |
++| `K8S_IMAGE_TAG_MISSING` | warning | image without a tag and without a digest |
++| `K8S_IMAGE_TAG_LATEST` | warning | image tagged `latest` |
++| `K8S_PRIVILEGED_CONTAINER` | error | `securityContext.privileged: true` |
++| `K8S_ALLOW_PRIVILEGE_ESCALATION_ENABLED` | error | `allowPrivilegeEscalation: true` |
++| `K8S_ALLOW_PRIVILEGE_ESCALATION_NOT_DISABLED` | warning | `allowPrivilegeEscalation` absent or not `false` |
++| `K8S_RUN_AS_NON_ROOT_NOT_SET` | warning | `runAsNonRoot: true` neither at pod nor at container level |
++
++Structural findings: `K8S_YAML_INVALID` (error), `K8S_DOCUMENT_NOT_A_MAPPING` (warning),
++`K8S_MISSING_KIND` (warning), `K8S_MISSING_POD_SPEC` (warning), `K8S_NO_CONTAINERS`
++(warning), `K8S_INVALID_CONTAINER` (warning).
++
++**Missing configuration is distinguished from explicitly risky configuration**: an
++absent `allowPrivilegeEscalation` is a *warning* (`..._NOT_DISABLED`), while an explicit
++`true` is an *error* (`..._ENABLED`). The same separation applies to `privileged`.
++
++**Init containers are handled separately**: they are inspected for image, resources and
++security context, but the readiness/liveness probe rules are **not** applied to them
++(probes are not meaningful for init containers).
++
++### Limitations
++
++These checks are a **narrow, static lint**, not a complete Kubernetes validation and not
++a security certification. In particular they do **not** cover: API version validity,
++schema conformance, admission policies, RBAC, NetworkPolicy, PodSecurity admission,
++seccomp/AppArmor profiles, capabilities, volume and secret handling, resource-quota
++fitness, or anything that requires a live cluster. A clean result means only that the
++listed checks found nothing.
++
++## Adding a new tool
++
++1. Create `app/toolbox/tools/<name>.py` with:
++   * a Pydantic `BaseModel` describing the tool input;
++   * a class with the attributes `name`, `version`, `description`, `input_model` and a
++     method `execute(self, params, limits) -> ToolResult`;
++   * a module-level `TOOL = YourTool()` instance.
++   The module must not import FastAPI: the analysis layer stays framework-independent.
++2. Import the module in `app/toolbox/tools/__init__.py` and add it to `__all__`.
++3. Add the instance to the tuple in `_register_builtin_tools()` in
++   `app/toolbox/registry.py`. Identifiers must be unique: `register()` raises
++   `ValueError` on a duplicate.
++4. Add unit tests under `tests/` and, if the tool needs a new bound, a
++   `toolbox_*` field in `app/config/settings.py` plus the corresponding field in
++   `ToolboxLimits`.
++
++There is no dynamic import, no `eval`/`exec`, no shell and no plugin discovery: the
++registry is a static list, so a client can never make the process load or run anything.
++
++## Architecture note
++
++* **Layering**: `app/toolbox/base.py` (protocol, enums, dataclasses, limits, controlled
++  exceptions) → `app/toolbox/tools/*` (pure analysis) → `app/toolbox/registry.py`
++  (explicit registry) → `app/models/toolbox.py` (Pydantic API models) →
++  `app/routers/toolbox.py` (HTTP only). The analysis functions import no FastAPI symbol
++  and are unit-tested directly.
++* **Execution model**: parsing is CPU-bound, so the router offloads `tool.execute` with
++  `loop.run_in_executor(None, ...)`, the same pattern already used by `/api/fib/{x}` in
++  `app/routers/api.py`. The event loop is never blocked by a large manifest.
++* **Observability**: no parallel stack. The router emits one loguru line per run with
++  `run_id`, `tool`, `status`, `outcome` and `duration_ms` — never the payload, the
++  manifest, the diff or a possible secret. Prometheus metrics come from the existing
++  `prometheus-fastapi-instrumentator` instrumentation of all routes, and tracing from
++  the existing OpenTelemetry FastAPI instrumentation. No custom metric with `run_id`,
++  payload or resource-name labels is added.
++* **Alternatives excluded**: a separate microservice (the mandate forbids it and it
++  would add deployment surface); a task queue (the checks are bounded and synchronous);
++  a persistence layer for runs (no durable store is needed, so no `GET /runs/{id}` was
++  added and no in-memory store pretends to be durable); a plugin system with dynamic
++  imports (a security risk with no MVP benefit); LLM agents (out of scope).
++* **Prefix**: `/api/toolbox` instead of the literal `/api/v1/toolbox`, because the
++  application has no versioned prefix anywhere and the mandate asks to adapt the prefix
++  to repository conventions.
+diff --git a/docs/README.md b/docs/README.md
+index 84d9f3a..a55ea0e 100644
+--- a/docs/README.md
++++ b/docs/README.md
+@@ -18,8 +18,9 @@ C4 Model compliant, OWASP-reviewed, PCI-DSS/GDPR annotated.
+ | 9 | [ADR: Flask to FastAPI](09-adr-flask-to-fastapi.md) | Architects, Management | Migration decision record |
+ | 10 | [Datadog Integration](10-datadog-integration.md) | DevOps, SRE | APM auto-instrumentation, metrics, troubleshooting |
+ | 11 | [MCP Server](11-mcp-server.md) | Developers, LLM tool integrators | In-process MCP server at /api/mcp — why FastMCP + FastAPI, auth, tools, usage |
+-| 13 | [Agent Pipeline](13-agent-pipeline.md) | DevOps, Developers | The current pipeline: every pull request reviewed by roles, repaired, certified and merged with no person; how a change ends; the canary and the health check |
+ | 12 | [AI Pipeline](12-ai-pipeline.md) | DevOps, Developers | PR gate, Renovate auto-merge + self-repair, review/triage/release-notes, powered by [ci-shared](https://github.com/lorenzogirardi/ci-shared) |
++| 13 | [Agent Pipeline](13-agent-pipeline.md) | DevOps, Developers | The current pipeline: every pull request reviewed by roles, repaired, certified and merged with no person; how a change ends; the canary and the health check |
++| 14 | [Dev/SRE Toolbox](14-dev-sre-toolbox.md) | Developers, SRE | Tool catalogue and synchronous tool runs at /api/toolbox: json.validate, text.diff, k8s.manifest.inspect; limits, auth, limitations |
+ 
+ ## How to View
+ 
+diff --git a/requirements.txt b/requirements.txt
+index 32ec1cb..965ba6b 100644
+--- a/requirements.txt
++++ b/requirements.txt
+@@ -21,6 +21,9 @@ python-multipart==0.0.32
+ # Templating
+ jinja2==3.1.6
+ 
++# YAML parsing (Dev/SRE Toolbox - used only through safe_load / safe_load_all)
++PyYAML==6.0.3
++
+ # Observability
+ loguru==0.7.3
+ prometheus-fastapi-instrumentator==8.1.0
+diff --git a/tests/test_toolbox_api.py b/tests/test_toolbox_api.py
+new file mode 100644
+index 0000000..0a537b2
+--- /dev/null
++++ b/tests/test_toolbox_api.py
+@@ -0,0 +1,162 @@
++"""API tests for the Dev/SRE Toolbox router."""
++
++import pytest
++
++from app.toolbox import registry
++from app.toolbox.tools.json_validate import JsonValidateInput
++
++
++@pytest.mark.anyio
++async def test_catalogue_requires_auth(client):
++    resp = await client.get("/api/toolbox/tools")
++    assert resp.status_code == 401
++
++
++@pytest.mark.anyio
++async def test_catalogue_lists_the_three_tools(client, auth_headers):
++    resp = await client.get("/api/toolbox/tools", headers=auth_headers)
++    assert resp.status_code == 200
++    names = [t["name"] for t in resp.json()["tools"]]
++    assert names == ["json.validate", "k8s.manifest.inspect", "text.diff"]
++    for tool in resp.json()["tools"]:
++        assert tool["version"] == "1.0.0"
++        assert tool["description"]
++        assert isinstance(tool["input_schema"], dict)
++
++
++@pytest.mark.anyio
++async def test_run_requires_auth(client):
++    resp = await client.post("/api/toolbox/runs", json={"tool": "json.validate", "input": {"text": "1"}})
++    assert resp.status_code == 401
++
++
++@pytest.mark.anyio
++async def test_run_with_wrong_credentials_is_rejected(client):
++    import base64
++
++    bad = base64.b64encode(b"admin:wrong").decode()
++    resp = await client.post(
++        "/api/toolbox/runs",
++        json={"tool": "json.validate", "input": {"text": "1"}},
++        headers={"Authorization": f"Basic {bad}"},
++    )
++    assert resp.status_code == 401
++
++
++@pytest.mark.anyio
++async def test_valid_run_returns_the_uniform_schema(client, auth_headers):
++    resp = await client.post(
++        "/api/toolbox/runs",
++        json={"tool": "json.validate", "input": {"text": '{"a": 1}'}},
++        headers=auth_headers,
++    )
++    assert resp.status_code == 200
++    body = resp.json()
++    assert body["tool"] == "json.validate"
++    assert body["tool_version"] == "1.0.0"
++    assert body["status"] == "completed"
++    assert body["outcome"] == "pass"
++    assert body["summary"] == {"info": 0, "warning": 0, "error": 0}
++    assert body["findings"] == []
++    assert body["output"]["value"] == {"a": 1}
++    assert isinstance(body["run_id"], str) and body["run_id"]
++    assert isinstance(body["duration_ms"], int)
++
++
++@pytest.mark.anyio
++async def test_finding_is_not_an_http_error(client, auth_headers):
++    resp = await client.post(
++        "/api/toolbox/runs",
++        json={"tool": "json.validate", "input": {"text": "{"}},
++        headers=auth_headers,
++    )
++    assert resp.status_code == 200
++    body = resp.json()
++    assert body["outcome"] == "fail"
++    assert body["summary"]["error"] == 1
++    assert body["findings"][0]["code"] == "JSON_INVALID"
++
++
++@pytest.mark.anyio
++async def test_unknown_tool_returns_404(client, auth_headers):
++    resp = await client.post(
++        "/api/toolbox/runs",
++        json={"tool": "does.not.exist", "input": {}},
++        headers=auth_headers,
++    )
++    assert resp.status_code == 404
++    assert resp.json() == {"error": "Not found"}
++
++
++@pytest.mark.anyio
++async def test_malformed_request_returns_422(client, auth_headers):
++    resp = await client.post("/api/toolbox/runs", json={"input": {}}, headers=auth_headers)
++    assert resp.status_code == 422
++
++
++@pytest.mark.anyio
++async def test_invalid_tool_input_returns_422(client, auth_headers):
++    resp = await client.post(
++        "/api/toolbox/runs",
++        json={"tool": "json.validate", "input": {"wrong": 1}},
++        headers=auth_headers,
++    )
++    assert resp.status_code == 422
++
++
++@pytest.mark.anyio
++async def test_over_limit_input_returns_413(client, auth_headers):
++    resp = await client.post(
++        "/api/toolbox/runs",
++        json={"tool": "json.validate", "input": {"text": "x" * 300_000}},
++        headers=auth_headers,
++    )
++    assert resp.status_code == 413
++    assert "exceeds" in str(resp.json()["detail"])
++
++
++@pytest.mark.anyio
++async def test_internal_error_is_sanitized(client, auth_headers, monkeypatch):
++    class _Boom:
++        name = "json.validate"
++        version = "1.0.0"
++        description = "boom"
++        input_model = JsonValidateInput
++
++        def execute(self, params, limits):
++            raise RuntimeError("secret internal detail")
++
++    monkeypatch.setattr(registry, "get_tool", lambda name: _Boom())
++
++    resp = await client.post(
++        "/api/toolbox/runs",
++        json={"tool": "json.validate", "input": {"text": "1"}},
++        headers=auth_headers,
++    )
++    assert resp.status_code == 500
++    body = resp.text
++    assert "secret internal detail" not in body
++    assert "Traceback" not in body
++    assert "RuntimeError" not in body
++
++
++@pytest.mark.anyio
++async def test_openapi_exposes_both_toolbox_routes(client):
++    resp = await client.get("/api/openapi.json")
++    assert resp.status_code == 200
++    paths = resp.json()["paths"]
++    assert "/api/toolbox/tools" in paths
++    assert "/api/toolbox/runs" in paths
++    assert "get" in paths["/api/toolbox/tools"]
++    assert "post" in paths["/api/toolbox/runs"]
++
++
++@pytest.mark.anyio
++async def test_determinism_excluding_run_id_and_duration(client, auth_headers):
++    payload = {"tool": "k8s.manifest.inspect", "input": {"manifest": "kind: Service\nmetadata:\n  name: s\n"}}
++    first = (await client.post("/api/toolbox/runs", json=payload, headers=auth_headers)).json()
++    second = (await client.post("/api/toolbox/runs", json=payload, headers=auth_headers)).json()
++    for body in (first, second):
++        body.pop("run_id")
++        body.pop("duration_ms")
++    assert first == second
+diff --git a/tests/test_toolbox_json_validate.py b/tests/test_toolbox_json_validate.py
+new file mode 100644
+index 0000000..702b7c8
+--- /dev/null
++++ b/tests/test_toolbox_json_validate.py
+@@ -0,0 +1,91 @@
++"""Unit tests for the json.validate tool (framework-independent)."""
++
++import pytest
++
++from app.toolbox.base import Outcome, ToolLimitExceeded, ToolboxLimits
++from app.toolbox.tools.json_validate import TOOL, JsonValidateInput
++
++
++def _limits(**overrides) -> ToolboxLimits:
++    base = dict(
++        max_input_bytes=262_144,
++        max_yaml_documents=50,
++        max_yaml_depth=32,
++        max_findings=200,
++        max_diff_context_lines=10,
++    )
++    base.update(overrides)
++    return ToolboxLimits(**base)
++
++
++def _run(text: str, **overrides):
++    return TOOL.execute(JsonValidateInput(text=text), _limits(**overrides))
++
++
++def test_valid_object_returns_parsed_value():
++    result = _run('{"a": 1, "b": [true, null]}')
++    assert result.outcome is Outcome.PASS
++    assert result.findings == []
++    assert result.output["valid"] is True
++    assert result.output["value"] == {"a": 1, "b": [True, None]}
++
++
++def test_valid_scalar_is_accepted():
++    result = _run("42")
++    assert result.outcome is Outcome.PASS
++    assert result.output["value"] == 42
++
++
++def test_invalid_json_reports_position():
++    result = _run('{"a": }')
++    assert result.outcome is Outcome.FAIL
++    assert result.output["valid"] is False
++    assert result.output["line"] == 1
++    assert result.output["column"] >= 1
++    assert result.findings[0].code == "JSON_INVALID"
++    assert result.findings[0].severity.value == "error"
++
++
++def test_empty_input_is_invalid_not_an_exception():
++    result = _run("")
++    assert result.outcome is Outcome.FAIL
++    assert result.output["valid"] is False
++    assert result.findings[0].code == "JSON_INVALID"
++
++
++def test_whitespace_only_input_is_invalid():
++    result = _run("   \n  ")
++    assert result.outcome is Outcome.FAIL
++
++
++def test_url_like_string_is_treated_as_text_not_fetched():
++    result = _run("https://example.com/data.json")
++    assert result.outcome is Outcome.FAIL
++    assert result.output["valid"] is False
++
++
++def test_path_like_string_is_treated_as_text_not_opened():
++    result = _run("/etc/passwd")
++    assert result.outcome is Outcome.FAIL
++    assert result.output["valid"] is False
++
++
++def test_oversized_input_is_rejected_with_a_controlled_error():
++    with pytest.raises(ToolLimitExceeded) as exc:
++        _run("x" * 100, max_input_bytes=10)
++    assert exc.value.limit == "max_input_bytes"
++
++
++def test_output_is_deterministic():
++    first = _run('{"a": 1}')
++    second = _run('{"a": 1}')
++    assert first.outcome == second.outcome
++    assert first.output == second.output
++    assert first.findings == second.findings
++
++
++def test_invalid_output_is_deterministic():
++    first = _run('{"a": }')
++    second = _run('{"a": }')
++    assert first.output == second.output
++    assert first.findings == second.findings
+diff --git a/tests/test_toolbox_k8s_manifest.py b/tests/test_toolbox_k8s_manifest.py
+new file mode 100644
+index 0000000..f4cf020
+--- /dev/null
++++ b/tests/test_toolbox_k8s_manifest.py
+@@ -0,0 +1,349 @@
++"""Unit tests for the k8s.manifest.inspect tool (framework-independent)."""
++
++import pytest
++
++from app.toolbox.base import Outcome, ToolLimitExceeded, ToolboxLimits
++from app.toolbox.tools.k8s_manifest_inspect import FINDINGS_LIMIT_CODE, TOOL, K8sManifestInspectInput
++
++
++def _limits(**overrides) -> ToolboxLimits:
++    base = dict(
++        max_input_bytes=262_144,
++        max_yaml_documents=50,
++        max_yaml_depth=32,
++        max_findings=200,
++        max_diff_context_lines=10,
++    )
++    base.update(overrides)
++    return ToolboxLimits(**base)
++
++
++def _run(manifest: str, **overrides):
++    return TOOL.execute(K8sManifestInspectInput(manifest=manifest), _limits(**overrides))
++
++
++def _codes(result) -> set[str]:
++    return {f.code for f in result.findings}
++
++
++GOOD_DEPLOYMENT = """
++apiVersion: apps/v1
++kind: Deployment
++metadata:
++  name: good
++spec:
++  template:
++    spec:
++      securityContext:
++        runAsNonRoot: true
++      containers:
++        - name: app
++          image: nginx:1.27.0
++          resources:
++            requests:
++              cpu: 100m
++            limits:
++              cpu: 200m
++          readinessProbe:
++            httpGet:
++              path: /healthz
++              port: 80
++          livenessProbe:
++            httpGet:
++              path: /healthz
++              port: 80
++          securityContext:
++            allowPrivilegeEscalation: false
++"""
++
++
++def test_clean_deployment_passes():
++    result = _run(GOOD_DEPLOYMENT)
++    assert result.outcome is Outcome.PASS
++    assert result.findings == []
++    assert result.output["resources_inspected"] == 1
++
++
++def test_multi_document_manifest_is_inspected():
++    manifest = GOOD_DEPLOYMENT + "\n---\n" + GOOD_DEPLOYMENT.replace("name: good", "name: good2")
++    result = _run(manifest)
++    assert result.output["documents"] == 2
++    assert result.output["resources_inspected"] == 2
++
++
++def test_empty_documents_are_skipped():
++    # PyYAML yields one document per '---' marker: the leading '---\n---\n'
++    # produces a single empty (None) document followed by the Deployment, so
++    # the stream holds 2 documents and only 1 is inspected.
++    manifest = "---\n---\n" + GOOD_DEPLOYMENT
++    result = _run(manifest)
++    assert result.output["documents"] == 2
++    assert result.output["resources_inspected"] == 1
++
++
++def test_unsupported_kind_is_reported_as_info():
++    manifest = "apiVersion: v1\nkind: Service\nmetadata:\n  name: svc\n"
++    result = _run(manifest)
++    assert "K8S_UNSUPPORTED_KIND" in _codes(result)
++    assert result.outcome is Outcome.PASS
++
++
++def test_missing_kind_is_reported():
++    result = _run("apiVersion: v1\nmetadata:\n  name: x\n")
++    assert "K8S_MISSING_KIND" in _codes(result)
++
++
++def test_unexpected_structure_is_reported():
++    manifest = "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: x\nspec: not-a-mapping\n"
++    result = _run(manifest)
++    assert "K8S_MISSING_POD_SPEC" in _codes(result)
++
++
++def test_non_mapping_document_is_reported():
++    result = _run("- just\n- a\n- list\n")
++    assert "K8S_DOCUMENT_NOT_A_MAPPING" in _codes(result)
++
++
++def test_missing_requests_and_limits_are_reported():
++    manifest = """
++apiVersion: apps/v1
++kind: Deployment
++metadata:
++  name: x
++spec:
++  template:
++    spec:
++      containers:
++        - name: app
++          image: nginx:1.27.0
++"""
++    codes = _codes(_run(manifest))
++    assert "K8S_CONTAINER_MISSING_REQUESTS" in codes
++    assert "K8S_CONTAINER_MISSING_LIMITS" in codes
++
++
++def test_missing_probes_are_reported():
++    manifest = """
++apiVersion: apps/v1
++kind: Deployment
++metadata:
++  name: x
++spec:
++  template:
++    spec:
++      containers:
++        - name: app
++          image: nginx:1.27.0
++"""
++    codes = _codes(_run(manifest))
++    assert "K8S_MISSING_READINESS_PROBE" in codes
++    assert "K8S_MISSING_LIVENESS_PROBE" in codes
++
++
++def test_image_without_tag_is_reported():
++    manifest = GOOD_DEPLOYMENT.replace("nginx:1.27.0", "nginx")
++    assert "K8S_IMAGE_TAG_MISSING" in _codes(_run(manifest))
++
++
++def test_image_with_latest_tag_is_reported():
++    manifest = GOOD_DEPLOYMENT.replace("nginx:1.27.0", "nginx:latest")
++    assert "K8S_IMAGE_TAG_LATEST" in _codes(_run(manifest))
++
++
++def test_image_by_digest_is_accepted():
++    manifest = GOOD_DEPLOYMENT.replace(
++        "nginx:1.27.0", "nginx@sha256:" + "a" * 64
++    )
++    codes = _codes(_run(manifest))
++    assert "K8S_IMAGE_TAG_MISSING" not in codes
++    assert "K8S_IMAGE_TAG_LATEST" not in codes
++
++
++def test_privileged_container_is_an_error():
++    manifest = GOOD_DEPLOYMENT.replace(
++        "allowPrivilegeEscalation: false", "privileged: true"
++    )
++    result = _run(manifest)
++    assert "K8S_PRIVILEGED_CONTAINER" in _codes(result)
++    assert result.outcome is Outcome.FAIL
++
++
++def test_allow_privilege_escalation_true_is_an_error():
++    manifest = GOOD_DEPLOYMENT.replace(
++        "allowPrivilegeEscalation: false", "allowPrivilegeEscalation: true"
++    )
++    assert "K8S_ALLOW_PRIVILEGE_ESCALATION_ENABLED" in _codes(_run(manifest))
++
++
++def test_allow_privilege_escalation_absent_is_a_warning():
++    manifest = GOOD_DEPLOYMENT.replace("          securityContext:\n            allowPrivilegeEscalation: false\n", "")
++    assert "K8S_ALLOW_PRIVILEGE_ESCALATION_NOT_DISABLED" in _codes(_run(manifest))
++
++
++def test_run_as_non_root_at_pod_level_satisfies_the_check():
++    manifest = GOOD_DEPLOYMENT.replace("          securityContext:\n            allowPrivilegeEscalation: false\n", "")
++    assert "K8S_RUN_AS_NON_ROOT_NOT_SET" not in _codes(_run(manifest))
++
++
++def test_run_as_non_root_absent_is_reported():
++    manifest = GOOD_DEPLOYMENT.replace("      securityContext:\n        runAsNonRoot: true\n", "")
++    assert "K8S_RUN_AS_NON_ROOT_NOT_SET" in _codes(_run(manifest))
++
++
++def test_init_containers_do_not_receive_probe_findings():
++    manifest = """
++apiVersion: apps/v1
++kind: Deployment
++metadata:
++  name: x
++spec:
++  template:
++    spec:
++      securityContext:
++        runAsNonRoot: true
++      initContainers:
++        - name: init
++          image: busybox:1.36.0
++          resources:
++            requests:
++              cpu: 10m
++            limits:
++              cpu: 20m
++          securityContext:
++            allowPrivilegeEscalation: false
++      containers:
++        - name: app
++          image: nginx:1.27.0
++          resources:
++            requests:
++              cpu: 100m
++            limits:
++              cpu: 200m
++          readinessProbe:
++            httpGet:
++              path: /healthz
++              port: 80
++          livenessProbe:
++            httpGet:
++              path: /healthz
++              port: 80
++          securityContext:
++            allowPrivilegeEscalation: false
++"""
++    result = _run(manifest)
++    init_findings = [f for f in result.findings if f.location.path and "initContainers" in f.location.path]
++    assert init_findings == []
++    assert result.outcome is Outcome.PASS
++
++
++def test_init_container_security_is_still_checked():
++    manifest = """
++apiVersion: apps/v1
++kind: Deployment
++metadata:
++  name: x
++spec:
++  template:
++    spec:
++      securityContext:
++        runAsNonRoot: true
++      initContainers:
++        - name: init
++          image: busybox:1.36.0
++          securityContext:
++            privileged: true
++      containers:
++        - name: app
++          image: nginx:1.27.0
++"""
++    result = _run(manifest)
++    privileged = [f for f in result.findings if f.code == "K8S_PRIVILEGED_CONTAINER"]
++    assert len(privileged) == 1
++    assert "initContainers" in privileged[0].location.path
++
++
++def test_statefulset_and_daemonset_are_supported():
++    for kind in ("StatefulSet", "DaemonSet"):
++        manifest = GOOD_DEPLOYMENT.replace("kind: Deployment", f"kind: {kind}")
++        result = _run(manifest)
++        assert result.output["resources_inspected"] == 1
++        assert "K8S_UNSUPPORTED_KIND" not in _codes(result)
++
++
++def test_unsafe_yaml_tag_is_rejected():
++    manifest = "!!python/object/apply:os.system ['echo hi']"
++    result = _run(manifest)
++    assert result.outcome is Outcome.FAIL
++    assert "K8S_YAML_INVALID" in _codes(result)
++
++
++def test_yaml_alias_is_rejected():
++    manifest = "a: &x [1,2]\nb: *x\n"
++    result = _run(manifest)
++    assert result.outcome is Outcome.FAIL
++    assert "K8S_YAML_INVALID" in _codes(result)
++
++
++def test_invalid_yaml_is_a_negative_analysis_result():
++    result = _run("kind: [unclosed\n")
++    assert result.outcome is Outcome.FAIL
++    assert result.output["valid_yaml"] is False
++
++
++def test_document_count_limit_is_enforced():
++    manifest = "---\n".join([GOOD_DEPLOYMENT] * 3)
++    with pytest.raises(ToolLimitExceeded) as exc:
++        _run(manifest, max_yaml_documents=2)
++    assert exc.value.limit == "max_yaml_documents"
++
++
++def test_depth_limit_is_enforced():
++    manifest = "a:\n  b:\n    c:\n      d: 1\n"
++    with pytest.raises(ToolLimitExceeded) as exc:
++        _run(manifest, max_yaml_depth=2)
++    assert exc.value.limit == "max_yaml_depth"
++
++
++def test_findings_limit_is_reported_not_truncated_silently():
++    manifest = """
++apiVersion: apps/v1
++kind: Deployment
++metadata:
++  name: x
++spec:
++  template:
++    spec:
++      containers:
++        - name: a
++          image: nginx
++        - name: b
++          image: nginx
++        - name: c
++          image: nginx
++"""
++    result = _run(manifest, max_findings=3)
++    assert result.outcome is Outcome.ERROR
++    assert result.output["limit_exceeded"] is True
++    assert result.findings[-1].code == FINDINGS_LIMIT_CODE
++    assert len(result.findings) == 3
++
++
++def test_oversized_manifest_is_rejected():
++    with pytest.raises(ToolLimitExceeded) as exc:
++        _run("x" * 100, max_input_bytes=10)
++    assert exc.value.limit == "max_input_bytes"
++
++
++def test_output_is_deterministic():
++    first = _run(GOOD_DEPLOYMENT)
++    second = _run(GOOD_DEPLOYMENT)
++    assert first.outcome == second.outcome
++    assert first.output == second.output
++    assert first.findings == second.findings
++
++
++def test_findings_are_deterministic_for_a_dirty_manifest():
++    manifest = GOOD_DEPLOYMENT.replace("nginx:1.27.0", "nginx:latest")
++    first = _run(manifest)
++    second = _run(manifest)
++    assert first.findings == second.findings
+diff --git a/tests/test_toolbox_regression.py b/tests/test_toolbox_regression.py
+new file mode 100644
+index 0000000..802d82a
+--- /dev/null
++++ b/tests/test_toolbox_regression.py
+@@ -0,0 +1,45 @@
++"""Regression tests: the existing endpoints keep working with the toolbox mounted."""
++
++import pytest
++
++
++@pytest.mark.anyio
++async def test_contexts_still_work(client):
++    resp = await client.get("/api/contexts")
++    assert resp.status_code == 200
++    assert resp.json() == []
++
++
++@pytest.mark.anyio
++async def test_fibonacci_still_works(client):
++    resp = await client.get("/api/fib/10")
++    assert resp.status_code == 200
++    assert resp.json()["result"] == "55"
++
++
++@pytest.mark.anyio
++async def test_health_still_works(client):
++    resp = await client.get("/api/mgmt/health")
++    assert resp.status_code in (200, 503)
++
++
++@pytest.mark.anyio
++async def test_debug_ping_still_requires_auth(client):
++    resp = await client.get("/api/debug/ping", params={"host": "localhost"})
++    assert resp.status_code == 401
++
++
++@pytest.mark.anyio
++async def test_400_envelope_is_unchanged(client):
++    resp = await client.get("/api/fib/5001")
++    assert resp.status_code == 400
++    assert resp.json() == {"error": "Bad request"}
++
++
++@pytest.mark.anyio
++async def test_mappings_still_lists_routes(client):
++    resp = await client.get("/api/mgmt/mappings")
++    assert resp.status_code == 200
++    paths = {m["path"] for m in resp.json()["mappings"]}
++    assert "/api/contexts" in paths
++    assert "/api/toolbox/tools" in paths
+diff --git a/tests/test_toolbox_text_diff.py b/tests/test_toolbox_text_diff.py
+new file mode 100644
+index 0000000..7599194
+--- /dev/null
++++ b/tests/test_toolbox_text_diff.py
+@@ -0,0 +1,85 @@
++"""Unit tests for the text.diff tool (framework-independent)."""
++
++import pytest
++
++from app.toolbox.base import Outcome, ToolLimitExceeded, ToolboxLimits
++from app.toolbox.tools.text_diff import TOOL, TextDiffInput
++
++
++def _limits(**overrides) -> ToolboxLimits:
++    base = dict(
++        max_input_bytes=262_144,
++        max_yaml_documents=50,
++        max_yaml_depth=32,
++        max_findings=200,
++        max_diff_context_lines=10,
++    )
++    base.update(overrides)
++    return ToolboxLimits(**base)
++
++
++def _run(left: str, right: str, context_lines: int = 3, **overrides):
++    return TOOL.execute(
++        TextDiffInput(left=left, right=right, context_lines=context_lines),
++        _limits(**overrides),
++    )
++
++
++def test_identical_strings_pass_with_empty_diff():
++    result = _run("a\nb\n", "a\nb\n")
++    assert result.outcome is Outcome.PASS
++    assert result.output["identical"] is True
++    assert result.output["diff"] == ""
++
++
++def test_changed_strings_produce_a_unified_diff():
++    result = _run("a\nb\nc\n", "a\nB\nc\n")
++    assert result.outcome is Outcome.FAIL
++    assert result.output["identical"] is False
++    diff = result.output["diff"]
++    assert diff.startswith("--- left")
++    assert "+++ right" in diff
++    assert "-b" in diff
++    assert "+B" in diff
++
++
++def test_empty_inputs_are_identical():
++    result = _run("", "")
++    assert result.outcome is Outcome.PASS
++    assert result.output["identical"] is True
++
++
++def test_empty_left_against_non_empty_right():
++    result = _run("", "x\n")
++    assert result.outcome is Outcome.FAIL
++    assert "+x" in result.output["diff"]
++
++
++def test_context_lines_zero_is_allowed():
++    result = _run("a\nb\nc\n", "a\nB\nc\n", context_lines=0)
++    assert result.output["context_lines"] == 0
++
++
++def test_context_lines_above_the_limit_is_rejected():
++    with pytest.raises(ToolLimitExceeded) as exc:
++        _run("a\n", "b\n", context_lines=11, max_diff_context_lines=10)
++    assert exc.value.limit == "max_diff_context_lines"
++
++
++def test_oversized_left_is_rejected():
++    with pytest.raises(ToolLimitExceeded) as exc:
++        _run("x" * 100, "y", max_input_bytes=10)
++    assert exc.value.limit == "max_input_bytes"
++
++
++def test_oversized_right_is_rejected():
++    with pytest.raises(ToolLimitExceeded) as exc:
++        _run("y", "x" * 100, max_input_bytes=10)
++    assert exc.value.limit == "max_input_bytes"
++
++
++def test_output_is_deterministic():
++    first = _run("a\nb\n", "a\nc\n")
++    second = _run("a\nb\n", "a\nc\n")
++    assert first.outcome == second.outcome
++    assert first.output == second.output

@@ -1,0 +1,33 @@
+diff --git a/docs/README.md b/docs/README.md
+index 1907771..a55ea0e 100644
+--- a/docs/README.md
++++ b/docs/README.md
+@@ -18,9 +18,9 @@ C4 Model compliant, OWASP-reviewed, PCI-DSS/GDPR annotated.
+ | 9 | [ADR: Flask to FastAPI](09-adr-flask-to-fastapi.md) | Architects, Management | Migration decision record |
+ | 10 | [Datadog Integration](10-datadog-integration.md) | DevOps, SRE | APM auto-instrumentation, metrics, troubleshooting |
+ | 11 | [MCP Server](11-mcp-server.md) | Developers, LLM tool integrators | In-process MCP server at /api/mcp — why FastMCP + FastAPI, auth, tools, usage |
++| 12 | [AI Pipeline](12-ai-pipeline.md) | DevOps, Developers | PR gate, Renovate auto-merge + self-repair, review/triage/release-notes, powered by [ci-shared](https://github.com/lorenzogirardi/ci-shared) |
+ | 13 | [Agent Pipeline](13-agent-pipeline.md) | DevOps, Developers | The current pipeline: every pull request reviewed by roles, repaired, certified and merged with no person; how a change ends; the canary and the health check |
+ | 14 | [Dev/SRE Toolbox](14-dev-sre-toolbox.md) | Developers, SRE | Tool catalogue and synchronous tool runs at /api/toolbox: json.validate, text.diff, k8s.manifest.inspect; limits, auth, limitations |
+-| 12 | [AI Pipeline](12-ai-pipeline.md) | DevOps, Developers | PR gate, Renovate auto-merge + self-repair, review/triage/release-notes, powered by [ci-shared](https://github.com/lorenzogirardi/ci-shared) |
+ 
+ ## How to View
+ 
+diff --git a/tests/test_toolbox_k8s_manifest.py b/tests/test_toolbox_k8s_manifest.py
+index dd82099..f4cf020 100644
+--- a/tests/test_toolbox_k8s_manifest.py
++++ b/tests/test_toolbox_k8s_manifest.py
+@@ -72,9 +72,12 @@ def test_multi_document_manifest_is_inspected():
+ 
+ 
+ def test_empty_documents_are_skipped():
++    # PyYAML yields one document per '---' marker: the leading '---\n---\n'
++    # produces a single empty (None) document followed by the Deployment, so
++    # the stream holds 2 documents and only 1 is inspected.
+     manifest = "---\n---\n" + GOOD_DEPLOYMENT
+     result = _run(manifest)
+-    assert result.output["documents"] == 3
++    assert result.output["documents"] == 2
+     assert result.output["resources_inspected"] == 1
+ 
+ 

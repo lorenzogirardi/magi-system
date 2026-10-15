@@ -133,6 +133,9 @@ magi report --run-id <run-id> [--format md|json]
 | `--offline` | Use the scripted fake model. |
 | `--runs-root` / `MAGI_RUNS_ROOT` | Where workspaces, artifacts and the run database live (default `~/.magi/runs`). |
 
+On a laptop, keep the machine awake while a run is active (macOS: `caffeinate -i magi run ...`);
+see [known limits](docs/limits.md).
+
 Exit codes: `0` SUCCESS, `2` any other terminal status, `1` the run could not start.
 
 Each run lives in `<runs-root>/<run-id>/`: `workspace/` (isolated clone, branch
@@ -179,3 +182,6 @@ Uploads the verified patch and report as an artifact; never pushes. See
 - [GitHub Actions](docs/github-actions.md): composite action, example workflow, security rules.
 - [Known limits](docs/limits.md): what is not implemented.
 - [Brief](docs/brief/): the normative specification this implements.
+- [Case study: first SUCCESS on a real target](examples/run-20261015-205501-e0a70f/article.md)
+  and [the twelve runs that led to it](examples/run-20261015-205501-e0a70f/training.md),
+  with the request and the run artifacts.

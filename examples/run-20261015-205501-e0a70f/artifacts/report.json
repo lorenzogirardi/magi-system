@@ -1,0 +1,1331 @@
+{
+  "budget_used": {
+    "cost_usd": 1.047448,
+    "elapsed_seconds": 1158.991,
+    "llm_calls": 105,
+    "tokens": 5289901,
+    "tool_calls": 714
+  },
+  "change_levels": {
+    "deployed": false,
+    "integrated": false,
+    "verified": true
+  },
+  "decisions": {
+    "selection:r0": {
+      "meta": {
+        "evidence_refs": [],
+        "id": "sel-66c85478c80c888c",
+        "input_hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "phase": "selection",
+        "plan_version": 1,
+        "producer": "sys.platform",
+        "round": 0
+      },
+      "outcome": "selected",
+      "rationale": "selected prop-a4f87e35bf03b7a5 by peer rubric among admissible proposals",
+      "selected_proposal_id": "prop-a4f87e35bf03b7a5",
+      "standings": [
+        {
+          "admissible": false,
+          "proposal_id": "prop-4c779ea4f01dc091",
+          "rank": null,
+          "reasons": [
+            "critical claim refuted: Platform policy lists .github/workflows/**, .gitlab-ci.yml, .git/** and .magi/** as protected paths, so CI configuration cannot be modified by this change.",
+            "critical unknown unresolved: The write scope is not explicitly bounded in the snapshot (empty write_scopes), so the change is limited by convention to app/**, tests/**, docs/**, README.md, requirements.txt and .env.example, and never to protected paths."
+          ],
+          "score": null
+        },
+        {
+          "admissible": true,
+          "proposal_id": "prop-a4f87e35bf03b7a5",
+          "rank": 1,
+          "reasons": [],
+          "score": 4.5909
+        },
+        {
+          "admissible": true,
+          "proposal_id": "prop-e01963b9410d23d6",
+          "rank": 2,
+          "reasons": [],
+          "score": 4.5909
+        }
+      ],
+      "tie_break_applied": "scores within 0.05: tie-break ['fewer_planned_changes', 'fewer_assumptions', 'magi_order'] chose prop-a4f87e35bf03b7a5"
+    }
+  },
+  "environment_id": "container:docker:docker.io/library/pytbak-magi:local",
+  "findings": [
+    {
+      "category": "tooling",
+      "id": "fnd-0391e702fa7b5221",
+      "producer": "spec.qa",
+      "severity": "minor",
+      "status": "REFUTED",
+      "status_reason": "a supporting claim was refuted by verification",
+      "subject_id": "prop-4c779ea4f01dc091",
+      "title": "No new regression test module; regression relies on running existing tests unchanged"
+    },
+    {
+      "category": "operations",
+      "id": "fnd-047eea3bb1884a95",
+      "producer": "spec.sre",
+      "severity": "minor",
+      "status": "CONFIRMED",
+      "status_reason": "all supporting claims verified",
+      "subject_id": "prop-4c779ea4f01dc091",
+      "title": "No per-tool metrics; only route-level instrumentation is available"
+    },
+    {
+      "category": "documentation",
+      "id": "fnd-0823de0d8da9fdb1",
+      "producer": "doc.tech_writer",
+      "severity": "minor",
+      "status": "UNRESOLVED",
+      "status_reason": "no checkable claims supplied",
+      "subject_id": "prop-4c779ea4f01dc091",
+      "title": "CHANGELOG.md is omitted from changes and documentation impact"
+    },
+    {
+      "category": "operations",
+      "id": "fnd-0948834b53f47097",
+      "producer": "magi.balthasar",
+      "severity": "minor",
+      "status": "REFUTED",
+      "status_reason": "a supporting claim was refuted by verification",
+      "subject_id": "prop-a4f87e35bf03b7a5",
+      "title": "Unknown tool returns 404 with a body rewritten by the app-wide handler"
+    },
+    {
+      "category": "tooling",
+      "id": "fnd-09d0a2df5ed06ca5",
+      "producer": "magi.balthasar",
+      "severity": "info",
+      "status": "REFUTED",
+      "status_reason": "a supporting claim was refuted by verification",
+      "subject_id": "5cce89015d76b5ae76f53df705699179da21dfe3",
+      "title": "Final diff is truncated; core modules not reviewable in this context"
+    },
+    {
+      "category": "operations",
+      "id": "fnd-0b19bbe2965b2e3c",
+      "producer": "spec.sre",
+      "severity": "minor",
+      "status": "CONFIRMED",
+      "status_reason": "all supporting claims verified",
+      "subject_id": "prop-a4f87e35bf03b7a5",
+      "title": "Unknown tool returns 404 whose body is masked by the app-wide 404 handler"
+    },
+    {
+      "category": "tooling",
+      "id": "fnd-0b3388f8711acfb2",
+      "producer": "spec.qa",
+      "severity": "minor",
+      "status": "CONFIRMED",
+      "status_reason": "all supporting claims verified",
+      "subject_id": "5cce89015d76b5ae76f53df705699179da21dfe3",
+      "title": "Provided diff is truncated: router, models, base, registry, settings and main are not visible"
+    },
+    {
+      "category": "operations",
+      "id": "fnd-0e9e4319a14e9531",
+      "producer": "spec.sre",
+      "severity": "major",
+      "status": "CONFIRMED",
+      "status_reason": "all supporting claims verified",
+      "subject_id": "prop-a4f87e35bf03b7a5",
+      "title": "No per-run timeout or concurrency bound on tool execution"
+    },
+    {
+      "category": "architecture",
+      "id": "fnd-106e18718bc7dbf5",
+      "producer": "magi.casper",
+      "severity": "minor",
+      "status": "CONFIRMED",
+      "status_reason": "all supporting claims verified",
+      "subject_id": "prop-4c779ea4f01dc091",
+      "title": "Critical unresolved assumption on the YAML dependency and image build"
+    },
+    {
+      "category": "tooling",
+      "id": "fnd-10abb3d33e69af7b",
+      "producer": "magi.melchior",
+      "severity": "minor",
+      "status": "CONFIRMED",
+      "status_reason": "all supporting claims verified",
+      "subject_id": "prop-4c779ea4f01dc091",
+      "title": "Unresolved dependency-location assumption"
+    },
+    {
+      "category": "documentation",
+      "id": "fnd-119c0c32b865fefc",
+      "producer": "doc.tech_writer",
+      "severity": "minor",
+      "status": "CONFIRMED",
+      "status_reason": "all supporting claims verified",
+      "subject_id": "prop-e01963b9410d23d6",
+      "title": "README route count updated by assumption, not by measurement"
+    },
+    {
+      "category": "operations",
+      "id": "fnd-1acaa8441267a493",
+      "producer": "spec.sre",
+      "severity": "info",
+      "status": "CONFIRMED",
+      "status_reason": "all supporting claims verified",
+      "subject_id": "5cce89015d76b5ae76f53df705699179da21dfe3",
+      "title": "No new infrastructure; run_id is correlation-only and not persisted"
+    },
+    {
+      "category": "operations",
+      "id": "fnd-1b44ce5ac0af3c88",
+      "producer": "spec.sre",
+      "severity": "major",
+      "status": "CONFIRMED",
+      "status_reason": "all supporting claims verified",
+      "subject_id": "prop-a4f87e35bf03b7a5",
+      "title": "New hard dependency is imported at application-import time; a missing install takes the whole app down"
+    },
+    {
+      "category": "documentation",
+      "id": "fnd-1bf90d159b03a84f",
+      "producer": "dev.pair",
+      "severity": "minor",
+      "status": "CONFIRMED",
+      "status_reason": "all supporting claims verified",
+      "subject_id": "prop-a4f87e35bf03b7a5",
+      "title": "README.md not updated: stale route count and no toolbox section"
+    },
+    {
+      "category": "design",
+      "id": "fnd-20f63166a40340f3",
+      "producer": "spec.qa",
+      "severity": "minor",
+      "status": "REFUTED",
+      "status_reason": "a supporting claim was refuted by verification",
+      "subject_id": "prop-a4f87e35bf03b7a5",
+      "title": "allowPrivilegeEscalation absent is mapped to severity warning"
+    },
+    {
+      "category": "operations",
+      "id": "fnd-2487949323ee1afe",
+      "producer": "spec.sre",
+      "severity": "major",
+      "status": "CONFIRMED",
+      "status_reason": "all supporting claims verified",
+      "subject_id": "prop-a4f87e35bf03b7a5",
+      "title": "run_id is not propagated to tracing, so response/log/trace correlation is not achieved"
+    },
+    {
+      "category": "operations",
+      "id": "fnd-24ac1ede4f605f6b",
+      "producer": "spec.sre",
+      "severity": "major",
+      "status": "CONFIRMED",
+      "status_reason": "all supporting claims verified",
+      "subject_id": "prop-4c779ea4f01dc091",
+      "title": "Unknown-tool contract is left undecided in the plan"
+    },
+    {
+      "category": "design",
+      "id": "fnd-25cc414251548430",
+      "producer": "magi.melchior",
+      "severity": "major",
+      "status": "REFUTED",
+      "status_reason": "a supporting claim was refuted by verification",
+      "subject_id": "prop-4c779ea4f01dc091",
+      "title": "Unknown-tool response contract is undecided"
+    },
+    {
+      "category": "design",
+      "id": "fnd-2f4e3ff195f97b78",
+      "producer": "magi.balthasar",
+      "severity": "info",
+      "status": "CONFIRMED",
+      "status_reason": "all supporting claims verified",
+      "subject_id": "5cce89015d76b5ae76f53df705699179da21dfe3",
+      "title": "Findings-cap behaviour is a controlled analysis outcome, not an HTTP error"
+    },
+    {
+      "category": "tooling",
+      "id": "fnd-2f664ad8b2935fb1",
+      "producer": "magi.casper",
+      "severity": "minor",
+      "status": "CONFIRMED",
+      "status_reason": "all supporting claims verified",
+      "subject_id": "prop-4c779ea4f01dc091",
+      "title": "No new regression test module for existing endpoints"
+    },
+    {
+      "category": "operations",
+      "id": "fnd-32c6250e44274d3c",
+      "producer": "spec.sre",
+      "severity": "info",
+      "status": "CONFIRMED",
+      "status_reason": "all supporting claims verified",
+      "subject_id": "d93229eb56c5e8a12365cd6e48b0f610a8df59f5",
+      "title": "No new infrastructure, persistence or retrieval endpoint introduced"
+    },
+    {
+      "category": "design",
+      "id": "fnd-333ebeb9148af77e",
+      "producer": "spec.security",
+      "severity": "minor",
+      "status": "CONFIRMED",
+      "status_reason": "all supporting claims verified",
+      "subject_id": "prop-a4f87e35bf03b7a5",
+      "title": "Unknown tool id returns 404 whose body is masked by the app-wide 404 handler"
+    },
+    {
+      "category": "design",
+      "id": "fnd-3797b16f16a74a0a",
+      "producer": "magi.casper",
+      "severity": "info",
+      "status": "REFUTED",
+      "status_reason": "a supporting claim was refuted by verification",
+      "subject_id": "prop-a4f87e35bf03b7a5",
+      "title": "Findings cap handled as analysis outcome rather than a rejection"
+    },
+    {
+      "category": "operations",
+      "id": "fnd-397e27dee2fbdaec",
+      "producer": "spec.sre",
+      "severity": "minor",
+      "status": "CONFIRMED",
+      "status_reason": "all supporting claims verified",
+      "subject_id": "prop-4c779ea4f01dc091",
+      "title": "Inconsistent limit signalling inside the same tool"
+    },
+    {
+      "category": "security",
+      "id": "fnd-3c05e07df1967ae8",
+      "producer": "spec.security",
+      "severity": "minor",
+      "status": "CONFIRMED",
+      "status_reason": "all supporting claims verified",
+      "subject_id": "prop-e01963b9410d23d6",
+      "title": "CPU-bound tool execution shares the process-wide default thread pool with other endpoints"
+    },
+    {
+      "category": "security",
+      "id": "fnd-3d00bb5481ac0f5f",
+      "producer": "spec.qa",
+      "severity": "minor",
+      "status": "CONFIRMED",
+      "status_reason": "all supporting claims verified",
+      "subject_id": "5cce89015d76b5ae76f53df705699179da21dfe3",
+      "title": "Router-level security and observability claims are not verifiable from the diff"
+    },
+    {
+      "category": "operations",
+      "id": "fnd-442e9fb28055f263",
+      "producer": "spec.sre",
+      "severity": "minor",
+      "status": "UNRESOLVED",
+      "status_reason": "no checkable claims supplied",
+      "subject_id": "d93229eb56c5e8a12365cd6e48b0f610a8df59f5",
+      "title": "Request-size cap likely depends on Content-Length and may be bypassable"
+    },
+    {
+      "category": "operations",
+      "id": "fnd-4b06ef18f52f66bb",
+      "producer": "spec.sre",
+      "severity": "minor",
+      "status": "CONFIRMED",
+      "status_reason": "all supporting claims verified",
+      "subject_id": "5cce89015d76b5ae76f53df705699179da21dfe3",
+      "title": "Observability guarantees are documented but not asserted by any executed check"
+    },
+    {
+      "category": "operations",
+      "id": "fnd-4db5f4698b1105be",
+      "producer": "spec.security",
+      "severity": "major",
+      "status": "CONFIRMED",
+      "status_reason": "all supporting claims verified",
+      "subject_id": "prop-4c779ea4f01dc091",
+      "title": "PyYAML availability in the runtime image is an unresolved critical assumption"
+    },
+    {
+      "category": "tooling",
+      "id": "fnd-50570faed1b3cadb",
+      "producer": "spec.qa",
+      "severity": "minor",
+      "status": "CONFIRMED",
+      "status_reason": "all supporting claims verified",
+      "subject_id": "prop-4c779ea4f01dc091",
+      "title": "Critical assumption about docker/requirements.txt is left unresolved"
+    },
+    {
+      "category": "tooling",
+      "id": "fnd-5323d3b39cbfb0d5",
+      "producer": "spec.sre",
+      "severity": "info",
+      "status": "CONFIRMED",
+      "status_reason": "all supporting claims verified",
+      "subject_id": "d93229eb56c5e8a12365cd6e48b0f610a8df59f5",
+      "title": "PyYAML pin differs from the approved plan"
+    },
+    {
+      "category": "documentation",
+      "id": "fnd-5333b94cd0c04504",
+      "producer": "magi.balthasar",
+      "severity": "minor",
+      "status": "REFUTED",
+      "status_reason": "a supporting claim was refuted by verification",
+      "subject_id": "5cce89015d76b5ae76f53df705699179da21dfe3",
+      "title": "Pinned PyYAML version differs between plan and diff"
+    },
+    {
+      "category": "documentation",
+      "id": "fnd-5442afb989f7a85a",
+      "producer": "doc.tech_writer",
+      "severity": "minor",
+      "status": "CONFIRMED",
+      "status_reason": "all supporting claims verified",
+      "subject_id": "prop-a4f87e35bf03b7a5",
+      "title": "Unknown-tool 404 body must be documented as the generic envelope"
+    },
+    {
+      "category": "design",
+      "id": "fnd-5955204af7e2812b",
+      "producer": "spec.qa",
+      "severity": "minor",
+      "status": "REFUTED",
+      "status_reason": "a supporting claim was refuted by verification",
+      "subject_id": "prop-a4f87e35bf03b7a5",
+      "title": "TOOLBOX_ENABLED kill switch is not mandated and adds configuration surface"
+    },
+    {
+      "category": "design",
+      "id": "fnd-5ac08748b68a7848",
+      "producer": "magi.casper",
+      "severity": "major",
+      "status": "REFUTED",
+      "status_reason": "a supporting claim was refuted by verification",
+      "subject_id": "prop-4c779ea4f01dc091",
+      "title": "Unknown-tool behaviour is left undecided in the contract"
+    },
+    {
+      "category": "operations",
+      "id": "fnd-5af03a7670958729",
+      "producer": "spec.sre",
+      "severity": "minor",
+      "status": "CONFIRMED",
+      "status_reason": "all supporting claims verified",
+      "subject_id": "5cce89015d76b5ae76f53df705699179da21dfe3",
+      "title": "New toolbox limits are not surfaced in .env.example, weakening deploy-time discoverability"
+    },
+    {
+      "category": "documentation",
+      "id": "fnd-5b01cdc7717dde82",
+      "producer": "doc.tech_writer",
+      "severity": "major",
+      "status": "CONFIRMED",
+      "status_reason": "all supporting claims verified",
+      "subject_id": "prop-e01963b9410d23d6",
+      "title": "curl examples must carry the Basic Auth header to be 'working'"
+    },
+    {
+      "category": "tooling",
+      "id": "fnd-5badb476f9a6b438",
+      "producer": "spec.security",
+      "severity": "info",
+      "status": "CONFIRMED",
+      "status_reason": "all supporting claims verified",
+      "subject_id": "5cce89015d76b5ae76f53df705699179da21dfe3",
+      "title": "Pinned PyYAML version differs from the plan"
+    },
+    {
+      "category": "operations",
+      "id": "fnd-63b1bb275203bf7d",
+      "producer": "spec.sre",
+      "severity": "minor",
+      "status": "CONFIRMED",
+      "status_reason": "all supporting claims verified",
+      "subject_id": "5cce89015d76b5ae76f53df705699179da21dfe3",
+      "title": "Findings-cap edge case: max_findings=0 still returns one finding"
+    },
+    {
+      "category": "tooling",
+      "id": "fnd-65027bfc6fa13ed8",
+      "producer": "spec.qa",
+      "severity": "minor",
+      "status": "CONFIRMED",
+      "status_reason": "all supporting claims verified",
+      "subject_id": "prop-e01963b9410d23d6",
+      "title": "OpenAPI schema presence is only in the verification plan, not in a test module"
+    },
+    {
+      "category": "operations",
+      "id": "fnd-67fe388478aaecc9",
+      "producer": "spec.sre",
+      "severity": "minor",
+      "status": "CONFIRMED",
+      "status_reason": "all supporting claims verified",
+      "subject_id": "d93229eb56c5e8a12365cd6e48b0f610a8df59f5",
+      "title": "Observability log line is claimed but not asserted by any test"
+    },
+    {
+      "category": "design",
+      "id": "fnd-6839c9aacf460b18",
+      "producer": "magi.casper",
+      "severity": "minor",
+      "status": "REFUTED",
+      "status_reason": "a supporting claim was refuted by verification",
+      "subject_id": "prop-4c779ea4f01dc091",
+      "title": "Inconsistent limit-handling surface"
+    },
+    {
+      "category": "design",
+      "id": "fnd-68a2d65e641b943b",
+      "producer": "spec.qa",
+      "severity": "info",
+      "status": "CONFIRMED",
+      "status_reason": "all supporting claims verified",
+      "subject_id": "5cce89015d76b5ae76f53df705699179da21dfe3",
+      "title": "json.validate treats URL/path-like strings as text and returns a negative analysis result"
+    },
+    {
+      "category": "design",
+      "id": "fnd-6c885268e7f61679",
+      "producer": "spec.qa",
+      "severity": "major",
+      "status": "REFUTED",
+      "status_reason": "a supporting claim was refuted by verification",
+      "subject_id": "prop-4c779ea4f01dc091",
+      "title": "YAML document/depth limits return 200 with a finding instead of a controlled error"
+    },
+    {
+      "category": "security",
+      "id": "fnd-6d77def30946b128",
+      "producer": "spec.security",
+      "severity": "minor",
+      "status": "CONFIRMED",
+      "status_reason": "all supporting claims verified",
+      "subject_id": "5cce89015d76b5ae76f53df705699179da21dfe3",
+      "title": "json.loads recursion depth is not visibly guarded"
+    },
+    {
+      "category": "operations",
+      "id": "fnd-6f37705f1e243953",
+      "producer": "spec.sre",
+      "severity": "minor",
+      "status": "CONFIRMED",
+      "status_reason": "all supporting claims verified",
+      "subject_id": "prop-4c779ea4f01dc091",
+      "title": "run_id is not propagated to tracing, so response/log/trace correlation is not achieved"
+    },
+    {
+      "category": "documentation",
+      "id": "fnd-7227806d06e5f6ed",
+      "producer": "magi.balthasar",
+      "severity": "info",
+      "status": "REFUTED",
+      "status_reason": "a supporting claim was refuted by verification",
+      "subject_id": "prop-e01963b9410d23d6",
+      "title": "Finding code typo in the json.validate contract"
+    },
+    {
+      "category": "security",
+      "id": "fnd-74f30cd99195d5b0",
+      "producer": "spec.security",
+      "severity": "info",
+      "status": "UNRESOLVED",
+      "status_reason": "supporting claims could not be verified",
+      "subject_id": "5cce89015d76b5ae76f53df705699179da21dfe3",
+      "title": "Toolbox endpoints reuse the existing Basic Auth dependency"
+    },
+    {
+      "category": "design",
+      "id": "fnd-76856c99d1cf2f6a",
+      "producer": "spec.qa",
+      "severity": "major",
+      "status": "REFUTED",
+      "status_reason": "a supporting claim was refuted by verification",
+      "subject_id": "prop-4c779ea4f01dc091",
+      "title": "Unknown-tool contract is left ambiguous, so the acceptance test cannot be written deterministically"
+    },
+    {
+      "category": "operations",
+      "id": "fnd-7b433aa6c4d3d650",
+      "producer": "spec.sre",
+      "severity": "info",
+      "status": "UNRESOLVED",
+      "status_reason": "no checkable claims supplied",
+      "subject_id": "5cce89015d76b5ae76f53df705699179da21dfe3",
+      "title": "Request-size limit relies on Content-Length; per-field input limit remains the backstop"
+    },
+    {
+      "category": "security",
+      "id": "fnd-7d206a05af30ffd9",
+      "producer": "spec.security",
+      "severity": "info",
+      "status": "UNRESOLVED",
+      "status_reason": "no checkable claims supplied",
+      "subject_id": "prop-e01963b9410d23d6",
+      "title": "json.validate echoes the parsed value back in the response body"
+    },
+    {
+      "category": "documentation",
+      "id": "fnd-81b932f163223bdf",
+      "producer": "doc.tech_writer",
+      "severity": "minor",
+      "status": "CONFIRMED",
+      "status_reason": "all supporting claims verified",
+      "subject_id": "prop-4c779ea4f01dc091",
+      "title": "Single document mixes all four Di\u00e1taxis modes"
+    },
+    {
+      "category": "design",
+      "id": "fnd-84c8a9cf66a45238",
+      "producer": "spec.security",
+      "severity": "major",
+      "status": "UNRESOLVED",
+      "status_reason": "no checkable claims supplied",
+      "subject_id": "prop-4c779ea4f01dc091",
+      "title": "Unknown-tool contract is left unresolved in the proposal"
+    },
+    {
+      "category": "design",
+      "id": "fnd-8614f28cd7f3e865",
+      "producer": "spec.qa",
+      "severity": "minor",
+      "status": "CONFIRMED",
+      "status_reason": "all supporting claims verified",
+      "subject_id": "5cce89015d76b5ae76f53df705699179da21dfe3",
+      "title": "Configurable limit settings fields are not verifiable from the diff"
+    },
+    {
+      "category": "documentation",
+      "id": "fnd-881601c67b5c1a44",
+      "producer": "doc.tech_writer",
+      "severity": "major",
+      "status": "CONFIRMED",
+      "status_reason": "all supporting claims verified",
+      "subject_id": "prop-a4f87e35bf03b7a5",
+      "title": "New environment settings are not documented in .env.example"
+    },
+    {
+      "category": "design",
+      "id": "fnd-88aca45a70526c7a",
+      "producer": "spec.security",
+      "severity": "minor",
+      "status": "UNRESOLVED",
+      "status_reason": "no checkable claims supplied",
+      "subject_id": "prop-e01963b9410d23d6",
+      "title": "Unknown tool id mapped to HTTP 422 conflates validation and lookup errors"
+    },
+    {
+      "category": "design",
+      "id": "fnd-88f2f5801632d752",
+      "producer": "magi.balthasar",
+      "severity": "minor",
+      "status": "REFUTED",
+      "status_reason": "a supporting claim was refuted by verification",
+      "subject_id": "prop-e01963b9410d23d6",
+      "title": "allowPrivilegeEscalation absent is reported as error, not as missing configuration"
+    },
+    {
+      "category": "design",
+      "id": "fnd-897b6d270c6775fd",
+      "producer": "spec.qa",
+      "severity": "minor",
+      "status": "REFUTED",
+      "status_reason": "a supporting claim was refuted by verification",
+      "subject_id": "prop-e01963b9410d23d6",
+      "title": "allowPrivilegeEscalation absent is mapped to severity error, conflating missing config with explicit risk"
+    },
+    {
+      "category": "security",
+      "id": "fnd-8bac93e25c289e79",
+      "producer": "spec.security",
+      "severity": "minor",
+      "status": "CONFIRMED",
+      "status_reason": "all supporting claims verified",
+      "subject_id": "prop-4c779ea4f01dc091",
+      "title": "CPU-bound tool execution shares the process-wide default thread pool with other endpoints"
+    },
+    {
+      "category": "security",
+      "id": "fnd-8bfdf3b27b946ad2",
+      "producer": "spec.security",
+      "severity": "minor",
+      "status": "CONFIRMED",
+      "status_reason": "all supporting claims verified",
+      "subject_id": "prop-a4f87e35bf03b7a5",
+      "title": "CPU-bound tool execution shares the process-wide default thread pool with other endpoints"
+    },
+    {
+      "category": "design",
+      "id": "fnd-8c8daa5cc5eade5f",
+      "producer": "magi.casper",
+      "severity": "info",
+      "status": "REFUTED",
+      "status_reason": "a supporting claim was refuted by verification",
+      "subject_id": "prop-a4f87e35bf03b7a5",
+      "title": "Non-mandated TOOLBOX_ENABLED kill switch adds configuration surface"
+    },
+    {
+      "category": "documentation",
+      "id": "fnd-8f17f28afdfdfcd0",
+      "producer": "doc.tech_writer",
+      "severity": "major",
+      "status": "CONFIRMED",
+      "status_reason": "all supporting claims verified",
+      "subject_id": "prop-4c779ea4f01dc091",
+      "title": "curl examples must carry the Basic Auth header to be 'working'"
+    },
+    {
+      "category": "operations",
+      "id": "fnd-8ffa5dee4774d2ea",
+      "producer": "spec.sre",
+      "severity": "major",
+      "status": "CONFIRMED",
+      "status_reason": "all supporting claims verified",
+      "subject_id": "prop-e01963b9410d23d6",
+      "title": "New hard dependency is imported at application-import time; a missing install takes the whole app down"
+    },
+    {
+      "category": "design",
+      "id": "fnd-919a9e798f1b3763",
+      "producer": "spec.qa",
+      "severity": "info",
+      "status": "CONFIRMED",
+      "status_reason": "all supporting claims verified",
+      "subject_id": "5cce89015d76b5ae76f53df705699179da21dfe3",
+      "title": "Findings cap truncates the list but appends an explicit notice finding"
+    },
+    {
+      "category": "operations",
+      "id": "fnd-91bbd67792952550",
+      "producer": "spec.sre",
+      "severity": "minor",
+      "status": "CONFIRMED",
+      "status_reason": "all supporting claims verified",
+      "subject_id": "prop-e01963b9410d23d6",
+      "title": "Two distinct limit channels must both be documented and monitored"
+    },
+    {
+      "category": "local_bug",
+      "id": "fnd-981f01c5a5ff21fa",
+      "producer": "dev.writer",
+      "severity": "blocker",
+      "status": "CONFIRMED",
+      "status_reason": "all supporting claims verified",
+      "subject_id": "prop-a4f87e35bf03b7a5",
+      "title": "New test test_empty_documents_are_skipped has a wrong expectation and fails"
+    },
+    {
+      "category": "design",
+      "id": "fnd-a539f9b767a4f880",
+      "producer": "spec.qa",
+      "severity": "minor",
+      "status": "CONFIRMED",
+      "status_reason": "all supporting claims verified",
+      "subject_id": "prop-a4f87e35bf03b7a5",
+      "title": "Unknown tool returns 404 with the generic app-wide body, hiding the reason"
+    },
+    {
+      "category": "operations",
+      "id": "fnd-a93bc54b39a99318",
+      "producer": "spec.sre",
+      "severity": "major",
+      "status": "CONFIRMED",
+      "status_reason": "all supporting claims verified",
+      "subject_id": "prop-4c779ea4f01dc091",
+      "title": "New hard dependency is imported at application-import time; a missing install takes the whole app down"
+    },
+    {
+      "category": "documentation",
+      "id": "fnd-ab41c025a375c2aa",
+      "producer": "spec.security",
+      "severity": "minor",
+      "status": "CONFIRMED",
+      "status_reason": "all supporting claims verified",
+      "subject_id": "5cce89015d76b5ae76f53df705699179da21dfe3",
+      "title": "New toolbox env variables are not added to .env.example"
+    },
+    {
+      "category": "local_bug",
+      "id": "fnd-b07925528ea4c56b",
+      "producer": "magi.balthasar",
+      "severity": "minor",
+      "status": "REFUTED",
+      "status_reason": "a supporting claim was refuted by verification",
+      "subject_id": "5cce89015d76b5ae76f53df705699179da21dfe3",
+      "title": "Image reference with an empty tag is not flagged"
+    },
+    {
+      "category": "security",
+      "id": "fnd-b18e18a620f7f4b4",
+      "producer": "spec.security",
+      "severity": "info",
+      "status": "UNRESOLVED",
+      "status_reason": "no checkable claims supplied",
+      "subject_id": "prop-a4f87e35bf03b7a5",
+      "title": "json.validate echoes the parsed value back in the response body"
+    },
+    {
+      "category": "local_bug",
+      "id": "fnd-b9cf793c665dec74",
+      "producer": "spec.security",
+      "severity": "minor",
+      "status": "CONFIRMED",
+      "status_reason": "all supporting claims verified",
+      "subject_id": "5cce89015d76b5ae76f53df705699179da21dfe3",
+      "title": "Findings-limit edge case when max_findings is 0"
+    },
+    {
+      "category": "operations",
+      "id": "fnd-bae970239a673ee7",
+      "producer": "spec.sre",
+      "severity": "info",
+      "status": "CONFIRMED",
+      "status_reason": "all supporting claims verified",
+      "subject_id": "d93229eb56c5e8a12365cd6e48b0f610a8df59f5",
+      "title": "Findings cap behaviour matches the no-silent-truncation requirement"
+    },
+    {
+      "category": "security",
+      "id": "fnd-bb5b64d6d3ea69fd",
+      "producer": "spec.security",
+      "severity": "info",
+      "status": "UNRESOLVED",
+      "status_reason": "supporting claims could not be verified",
+      "subject_id": "5cce89015d76b5ae76f53df705699179da21dfe3",
+      "title": "Internal errors are sanitized"
+    },
+    {
+      "category": "documentation",
+      "id": "fnd-bba19a7637ce0b94",
+      "producer": "dev.writer",
+      "severity": "major",
+      "status": "CONFIRMED",
+      "status_reason": "all supporting claims verified",
+      "subject_id": "prop-a4f87e35bf03b7a5",
+      "title": "README.md was not updated (edit command failed)"
+    },
+    {
+      "category": "operations",
+      "id": "fnd-c4d42d2fbb548173",
+      "producer": "spec.sre",
+      "severity": "major",
+      "status": "CONFIRMED",
+      "status_reason": "all supporting claims verified",
+      "subject_id": "prop-e01963b9410d23d6",
+      "title": "run_id is not propagated to tracing, so response/log/trace correlation is not achieved"
+    },
+    {
+      "category": "tooling",
+      "id": "fnd-c6dd1de353f5f805",
+      "producer": "dev.writer",
+      "severity": "minor",
+      "status": "REFUTED",
+      "status_reason": "a supporting claim was refuted by verification",
+      "subject_id": "prop-a4f87e35bf03b7a5",
+      "title": "PyYAML pin not reconciled with the installed version"
+    },
+    {
+      "category": "security",
+      "id": "fnd-c718833525387087",
+      "producer": "magi.balthasar",
+      "severity": "minor",
+      "status": "CONFIRMED",
+      "status_reason": "all supporting claims verified",
+      "subject_id": "5cce89015d76b5ae76f53df705699179da21dfe3",
+      "title": "json.validate has no recursion/depth guard for deeply nested JSON"
+    },
+    {
+      "category": "security",
+      "id": "fnd-ca7ab4bea63e84d7",
+      "producer": "spec.security",
+      "severity": "info",
+      "status": "UNRESOLVED",
+      "status_reason": "no checkable claims supplied",
+      "subject_id": "prop-4c779ea4f01dc091",
+      "title": "json.validate echoes the parsed value back in the response body"
+    },
+    {
+      "category": "tooling",
+      "id": "fnd-cd3d65fb52b893df",
+      "producer": "dev.writer",
+      "severity": "info",
+      "status": "CONFIRMED",
+      "status_reason": "all supporting claims verified",
+      "subject_id": "prop-a4f87e35bf03b7a5",
+      "title": "Type checking not available in this repository"
+    },
+    {
+      "category": "documentation",
+      "id": "fnd-cee87c3580e865a9",
+      "producer": "magi.casper",
+      "severity": "minor",
+      "status": "REFUTED",
+      "status_reason": "a supporting claim was refuted by verification",
+      "subject_id": "prop-4c779ea4f01dc091",
+      "title": "Critical claim about protected paths is marked refuted by verification"
+    },
+    {
+      "category": "operations",
+      "id": "fnd-d8af2193625eb640",
+      "producer": "spec.sre",
+      "severity": "major",
+      "status": "CONFIRMED",
+      "status_reason": "all supporting claims verified",
+      "subject_id": "prop-e01963b9410d23d6",
+      "title": "No per-run timeout or concurrency bound on tool execution"
+    },
+    {
+      "category": "documentation",
+      "id": "fnd-d999c98d9161028c",
+      "producer": "magi.melchior",
+      "severity": "major",
+      "status": "REFUTED",
+      "status_reason": "a supporting claim was refuted by verification",
+      "subject_id": "prop-4c779ea4f01dc091",
+      "title": "Critical claim about protected paths is refuted"
+    },
+    {
+      "category": "design",
+      "id": "fnd-d9ac646e5828b9cf",
+      "producer": "magi.melchior",
+      "severity": "minor",
+      "status": "REFUTED",
+      "status_reason": "a supporting claim was refuted by verification",
+      "subject_id": "prop-e01963b9410d23d6",
+      "title": "YAML depth limit enforced after parsing"
+    },
+    {
+      "category": "operations",
+      "id": "fnd-d9e587b175a1a3a7",
+      "producer": "spec.sre",
+      "severity": "minor",
+      "status": "CONFIRMED",
+      "status_reason": "all supporting claims verified",
+      "subject_id": "prop-a4f87e35bf03b7a5",
+      "title": "No per-tool metrics; only route-level instrumentation is available"
+    },
+    {
+      "category": "documentation",
+      "id": "fnd-dcaab8889bd9d603",
+      "producer": "doc.tech_writer",
+      "severity": "major",
+      "status": "CONFIRMED",
+      "status_reason": "all supporting claims verified",
+      "subject_id": "prop-a4f87e35bf03b7a5",
+      "title": "curl examples must carry the Basic Auth header to be 'working'"
+    },
+    {
+      "category": "tooling",
+      "id": "fnd-dd760f0118c8f737",
+      "producer": "dev.pair",
+      "severity": "info",
+      "status": "CONFIRMED",
+      "status_reason": "all supporting claims verified",
+      "subject_id": "prop-a4f87e35bf03b7a5",
+      "title": "Ad-hoc app.routes enumeration does not show the included routers"
+    },
+    {
+      "category": "operations",
+      "id": "fnd-e2264779c59aeadc",
+      "producer": "spec.sre",
+      "severity": "minor",
+      "status": "CONFIRMED",
+      "status_reason": "all supporting claims verified",
+      "subject_id": "prop-a4f87e35bf03b7a5",
+      "title": "TOOLBOX_ENABLED kill switch adds an untested configuration path and an ambiguous disabled behaviour"
+    },
+    {
+      "category": "documentation",
+      "id": "fnd-e34301ab1904e25d",
+      "producer": "doc.tech_writer",
+      "severity": "minor",
+      "status": "CONFIRMED",
+      "status_reason": "all supporting claims verified",
+      "subject_id": "prop-e01963b9410d23d6",
+      "title": "Document number 14 is assumed free"
+    },
+    {
+      "category": "operations",
+      "id": "fnd-e881814e18f758ae",
+      "producer": "spec.sre",
+      "severity": "minor",
+      "status": "CONFIRMED",
+      "status_reason": "all supporting claims verified",
+      "subject_id": "prop-e01963b9410d23d6",
+      "title": "No per-tool metrics; only route-level instrumentation is available"
+    },
+    {
+      "category": "security",
+      "id": "fnd-f0bc80406ee1300b",
+      "producer": "spec.security",
+      "severity": "info",
+      "status": "REFUTED",
+      "status_reason": "a supporting claim was refuted by verification",
+      "subject_id": "5cce89015d76b5ae76f53df705699179da21dfe3",
+      "title": "YAML parsing is safe and rejects aliases"
+    },
+    {
+      "category": "tooling",
+      "id": "fnd-f2ee1f446235ba60",
+      "producer": "spec.qa",
+      "severity": "minor",
+      "status": "CONFIRMED",
+      "status_reason": "all supporting claims verified",
+      "subject_id": "prop-e01963b9410d23d6",
+      "title": "No-network guarantee is asserted only by static import inspection"
+    },
+    {
+      "category": "operations",
+      "id": "fnd-f40af7db72a20915",
+      "producer": "spec.sre",
+      "severity": "major",
+      "status": "CONFIRMED",
+      "status_reason": "all supporting claims verified",
+      "subject_id": "prop-4c779ea4f01dc091",
+      "title": "No per-run timeout or concurrency bound on tool execution"
+    },
+    {
+      "category": "documentation",
+      "id": "fnd-f510b60eb6f2adb5",
+      "producer": "doc.tech_writer",
+      "severity": "minor",
+      "status": "CONFIRMED",
+      "status_reason": "all supporting claims verified",
+      "subject_id": "prop-a4f87e35bf03b7a5",
+      "title": "Single document mixes all four Di\u00e1taxis modes"
+    },
+    {
+      "category": "design",
+      "id": "fnd-f76c6ba5a511b127",
+      "producer": "magi.balthasar",
+      "severity": "minor",
+      "status": "REFUTED",
+      "status_reason": "a supporting claim was refuted by verification",
+      "subject_id": "prop-a4f87e35bf03b7a5",
+      "title": "Application logic partly lives in the router"
+    },
+    {
+      "category": "operations",
+      "id": "fnd-f7eaa57eaf183909",
+      "producer": "magi.balthasar",
+      "severity": "info",
+      "status": "REFUTED",
+      "status_reason": "a supporting claim was refuted by verification",
+      "subject_id": "5cce89015d76b5ae76f53df705699179da21dfe3",
+      "title": "Verification evidence is consistent with the acceptance criteria"
+    },
+    {
+      "category": "documentation",
+      "id": "fnd-f9fa34f6551d3bc0",
+      "producer": "doc.tech_writer",
+      "severity": "minor",
+      "status": "CONFIRMED",
+      "status_reason": "all supporting claims verified",
+      "subject_id": "prop-e01963b9410d23d6",
+      "title": "Single document mixes all four Di\u00e1taxis modes"
+    },
+    {
+      "category": "security",
+      "id": "fnd-fc09c9a72022fd06",
+      "producer": "spec.security",
+      "severity": "minor",
+      "status": "CONFIRMED",
+      "status_reason": "all supporting claims verified",
+      "subject_id": "5cce89015d76b5ae76f53df705699179da21dfe3",
+      "title": "Review limited by truncated diff"
+    },
+    {
+      "category": "documentation",
+      "id": "fnd-fcc6a6bce098d632",
+      "producer": "doc.tech_writer",
+      "severity": "major",
+      "status": "CONFIRMED",
+      "status_reason": "all supporting claims verified",
+      "subject_id": "prop-4c779ea4f01dc091",
+      "title": "Unknown-tool contract is undecided, so the API reference cannot be written"
+    },
+    {
+      "category": "documentation",
+      "id": "fnd-fd5881bd2a279a73",
+      "producer": "magi.balthasar",
+      "severity": "info",
+      "status": "CONFIRMED",
+      "status_reason": "all supporting claims verified",
+      "subject_id": "5cce89015d76b5ae76f53df705699179da21dfe3",
+      "title": "New TOOLBOX_* settings are not added to .env.example"
+    },
+    {
+      "category": "design",
+      "id": "fnd-feb64d17fcc5cc22",
+      "producer": "magi.balthasar",
+      "severity": "info",
+      "status": "REFUTED",
+      "status_reason": "a supporting claim was refuted by verification",
+      "subject_id": "prop-a4f87e35bf03b7a5",
+      "title": "YAML depth-limit enforcement not specified"
+    }
+  ],
+  "notice": "",
+  "outcome": {
+    "baseline_commit": "e3920b57784c30b69207c5e2d9252b48c5dc08a5",
+    "change_level": "verified",
+    "diagnosis": "all mandatory gates passed on the final candidate (verified change only; not integrated or deployed)",
+    "diff_ref": "artifacts/candidate.patch",
+    "documentation_refs": [
+      "README.md",
+      "docs/14-dev-sre-toolbox.md"
+    ],
+    "evidence_refs": [
+      "gate-9e022777819cefe8",
+      "gate-5c665e63aaf22880",
+      "gate-ef04780d0a64b12f",
+      "gate-be6048ba018d0515",
+      "gate-320c9b2d39ab1bc2",
+      "gate-8644a985b7973991",
+      "gate-3a808fc9aa47da13",
+      "gate-34b36d41d2cc92f3",
+      "gate-66632edb34634668"
+    ],
+    "final_commit": "5cce89015d76b5ae76f53df705699179da21dfe3",
+    "gate_checks": [
+      {
+        "candidate_commit": "5cce89015d76b5ae76f53df705699179da21dfe3",
+        "detail": "exit 0\n--- stdout ---\n\n--- stderr ---\n",
+        "evidence_ref": "gate-9e022777819cefe8",
+        "mandatory": true,
+        "name": "project.build",
+        "verdict": "PASS"
+      },
+      {
+        "candidate_commit": "5cce89015d76b5ae76f53df705699179da21dfe3",
+        "detail": "exit 0\n--- stdout ---\nsssssssssssssssssssssssss............................................... [ 42%]\n........................................................................ [ 84%]\n...........................                                              [100%]\n=============================== warnings summary ===============================\ntests/test_debug.py::test_cpu_spike[asyncio]\n  /usr/local/lib/python3.13/multiprocessing/popen_fork.py:73: DeprecationWarning: This process (pid=1) is multi-threaded, use of fork() may lead to deadlocks in the child.\n    self.pid = os.fork()\n\ntests/test_toolbox_api.py::test_openapi_exposes_both_toolbox_routes[asyncio]\n  /usr/local/lib/python3.13/site-packages/fastapi/openapi/utils.py:303: UserWarning: Duplicate Operation ID echo_headers_api_debug_headers_put for function echo_headers at /workspace/app/routers/debug.py\n    warnings.warn(message, stacklevel=1)\n\ntests/test_toolbox_api.py::test_openapi_exposes_both_toolbox_routes[asyncio]\n  /usr/local/l",
+        "evidence_ref": "gate-5c665e63aaf22880",
+        "mandatory": true,
+        "name": "project.test",
+        "verdict": "PASS"
+      },
+      {
+        "candidate_commit": "5cce89015d76b5ae76f53df705699179da21dfe3",
+        "detail": "exit 0\n--- stdout ---\nAll checks passed!\n\n--- stderr ---\n",
+        "evidence_ref": "gate-ef04780d0a64b12f",
+        "mandatory": true,
+        "name": "project.lint",
+        "verdict": "PASS"
+      },
+      {
+        "candidate_commit": "5cce89015d76b5ae76f53df705699179da21dfe3",
+        "detail": "11 acceptance scenario(s) passed; QA review without confirmed blockers",
+        "evidence_ref": "gate-be6048ba018d0515",
+        "mandatory": true,
+        "name": "qa.acceptance",
+        "verdict": "PASS"
+      },
+      {
+        "candidate_commit": "5cce89015d76b5ae76f53df705699179da21dfe3",
+        "detail": "review completed; 8 finding(s), none confirmed blocking",
+        "evidence_ref": "gate-320c9b2d39ab1bc2",
+        "mandatory": true,
+        "name": "security.review",
+        "verdict": "PASS"
+      },
+      {
+        "candidate_commit": "5cce89015d76b5ae76f53df705699179da21dfe3",
+        "detail": "review completed; 5 finding(s), none confirmed blocking",
+        "evidence_ref": "gate-8644a985b7973991",
+        "mandatory": true,
+        "name": "sre.review",
+        "verdict": "PASS"
+      },
+      {
+        "candidate_commit": "5cce89015d76b5ae76f53df705699179da21dfe3",
+        "detail": "documentation updated: ['README.md', 'docs/14-dev-sre-toolbox.md']",
+        "evidence_ref": "",
+        "mandatory": true,
+        "name": "docs.updated",
+        "verdict": "PASS"
+      },
+      {
+        "candidate_commit": "5cce89015d76b5ae76f53df705699179da21dfe3",
+        "detail": "three final reviews completed; 7 finding(s), none confirmed blocking",
+        "evidence_ref": "gate-3a808fc9aa47da13",
+        "mandatory": true,
+        "name": "magi.final_review",
+        "verdict": "PASS"
+      },
+      {
+        "candidate_commit": "5cce89015d76b5ae76f53df705699179da21dfe3",
+        "detail": "no protected change",
+        "evidence_ref": "gate-34b36d41d2cc92f3",
+        "mandatory": true,
+        "name": "integrity.protected_paths",
+        "verdict": "PASS"
+      },
+      {
+        "candidate_commit": "5cce89015d76b5ae76f53df705699179da21dfe3",
+        "detail": "all changes inside authorized scopes",
+        "evidence_ref": "gate-66632edb34634668",
+        "mandatory": true,
+        "name": "scope.write_scopes",
+        "verdict": "PASS"
+      }
+    ],
+    "patch_ref": "artifacts/candidate.patch",
+    "plan_version": 1,
+    "publications": [
+      {
+        "dedup_key": "export_patch:run-20261015-205501-e0a70f:5cce89015d76b5ae76f53df705699179da21dfe3",
+        "location": "artifacts/candidate.patch",
+        "operation": "export_patch",
+        "performed": true
+      },
+      {
+        "dedup_key": "local_branch:run-20261015-205501-e0a70f:5cce89015d76b5ae76f53df705699179da21dfe3",
+        "location": "run-20261015-205501-e0a70f/workspace#magi/run-20261015-205501-e0a70f",
+        "operation": "local_branch",
+        "performed": true
+      }
+    ],
+    "run_id": "run-20261015-205501-e0a70f",
+    "status": "SUCCESS",
+    "target_identity": "pytbak-target"
+  },
+  "project_config": {
+    "config": {
+      "code_paths": [
+        "app/**",
+        "alembic/**"
+      ],
+      "commands": {
+        "build": {
+          "run": "python -m compileall -q app",
+          "timeout_seconds": null
+        },
+        "lint": {
+          "run": "ruff check --no-cache --select E9,F63,F7,F82 app tests",
+          "timeout_seconds": null
+        },
+        "test": {
+          "run": "python -m pytest -q -p no:cacheprovider",
+          "timeout_seconds": 300.0
+        }
+      },
+      "container_image": "docker.io/library/pytbak-magi:local",
+      "doc_conventions": "",
+      "doc_paths": [
+        "docs/**",
+        "README.md",
+        "CHANGELOG.md"
+      ],
+      "generated_paths": [],
+      "languages": [
+        "python"
+      ],
+      "not_applicable": {},
+      "services": [],
+      "test_paths": [
+        "tests/**"
+      ],
+      "version": 1,
+      "write_scopes": []
+    },
+    "denied_commands": {},
+    "inferred": [],
+    "source": "file",
+    "warnings": []
+  },
+  "routing": [
+    {
+      "from": "intake",
+      "reason": "snapshot ready",
+      "to": "magi"
+    },
+    {
+      "from": "magi",
+      "reason": "plan prop-a4f87e35bf03b7a5",
+      "round": 0,
+      "to": "implementation"
+    },
+    {
+      "commit": "be60190615aac7abe1d6ea9c06992f3effaa1837",
+      "from": "dev.writer",
+      "step": "dev.writer:p1:c0",
+      "to": "next"
+    },
+    {
+      "commit": "d93229eb56c5e8a12365cd6e48b0f610a8df59f5",
+      "from": "dev.pair",
+      "step": "dev.pair:p1:c0",
+      "to": "next"
+    },
+    {
+      "commit": "d93229eb56c5e8a12365cd6e48b0f610a8df59f5",
+      "from": "triage",
+      "to": "verify"
+    },
+    {
+      "commit": "d93229eb56c5e8a12365cd6e48b0f610a8df59f5",
+      "from": "triage",
+      "to": "docs"
+    },
+    {
+      "commit": "5cce89015d76b5ae76f53df705699179da21dfe3",
+      "from": "tech_writer",
+      "to": "triage"
+    },
+    {
+      "commit": "5cce89015d76b5ae76f53df705699179da21dfe3",
+      "from": "triage",
+      "to": "verify"
+    },
+    {
+      "commit": "5cce89015d76b5ae76f53df705699179da21dfe3",
+      "from": "triage",
+      "to": "final_review"
+    },
+    {
+      "commit": "5cce89015d76b5ae76f53df705699179da21dfe3",
+      "from": "triage",
+      "to": "gate"
+    },
+    {
+      "from": "gate",
+      "status": "SUCCESS",
+      "to": "end"
+    }
+  ],
+  "selected_plan": "prop-a4f87e35bf03b7a5",
+  "target": {
+    "baseline_commit": "e3920b57784c30b69207c5e2d9252b48c5dc08a5",
+    "identity": "pytbak-target",
+    "locator": "<target-repo>",
+    "resolved_commit": "e3920b57784c30b69207c5e2d9252b48c5dc08a5"
+  },
+  "versions": {
+    "control_fingerprint": "30eef8ca1347cdb7628777971eab60e53c0f69b7d8727cbeb5efd8b4e139c3e1",
+    "platform": {
+      "commit": "b58daec8dd5f19d6f05275d00bd58db044c3a8f7",
+      "src_dirty": true,
+      "version": "0.1.0"
+    },
+    "policy": {
+      "profile": "default",
+      "sha256": "cd051194d9796d08261ad090dd938080cf83424b3072338907dfca6f5d8e73d3",
+      "version": "2026.10.1"
+    },
+    "prompts": {
+      "_common": "_common@v1#b9809c53ced6",
+      "dev_pair": "dev_pair@v1#6953b2642adc",
+      "dev_pair_assessment": "dev_pair_assessment@v1#ce4bb680acdb",
+      "dev_writer": "dev_writer@v1#15b6cee41209",
+      "magi_analysis": "magi_analysis@v2#5e3b2a345b5b",
+      "magi_cross_review": "magi_cross_review@v1#d7f67f496b97",
+      "magi_final_review": "magi_final_review@v1#df8adba1db74",
+      "magi_proposal": "magi_proposal@v1#e83918486511",
+      "preventive_review": "preventive_review@v1#657086975e8f",
+      "specialist_review": "specialist_review@v1#8be256ebe37a",
+      "tech_writer": "tech_writer@v1#529a938739aa"
+    }
+  }
+}
