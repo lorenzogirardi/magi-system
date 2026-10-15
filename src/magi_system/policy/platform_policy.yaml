@@ -1,0 +1,127 @@
+# Platform policy — protected. Agents never get write access to this file; it lives in
+# the control repository and is never mounted into a run workspace.
+policy_version: "2026.10.1"
+
+# Gates that must PASS on the final candidate for SUCCESS. NOT_APPLICABLE is accepted
+# only for gates listed in `not_applicable_allowed`, and only with a justification.
+mandatory_gates:
+  - project.build
+  - project.test
+  - project.lint
+  - qa.acceptance
+  - security.review
+  - sre.review
+  - docs.updated
+  - magi.final_review
+  - integrity.protected_paths
+  - scope.write_scopes
+not_applicable_allowed:
+  - project.build
+  - project.lint
+  - sre.review
+  - docs.updated
+
+# Paths in the target workspace no agent may write or delete (glob, POSIX, repo-relative).
+protected_paths:
+  - ".git/**"
+  - ".magi/**"
+  - ".github/workflows/**"
+  - ".gitlab-ci.yml"
+
+# Executables commands may start with. Everything else is denied.
+command_allowlist:
+  - make
+  - sh
+  - bash
+  - python
+  - python3
+  - pytest
+  - node
+  - npm
+  - npx
+  - go
+  - cargo
+  - mvn
+  - gradle
+  - ruff
+  - eslint
+  - "true"
+  - "false"
+# Substrings/argument sequences denied anywhere in the argv (defence in depth).
+command_denylist:
+  - "git push"
+  - "git remote"
+  - "curl"
+  - "wget"
+  - "ssh"
+  - "scp"
+  - "sudo"
+  - "docker"
+  - "podman"
+  - "kubectl"
+  - "rm -rf /"
+  - "npm publish"
+  - "npm install"
+  - "pip install"
+
+limits:
+  command_timeout_seconds: 300
+  max_output_bytes: 200000
+  max_agent_tool_iterations: 12
+
+decision:
+  # Fan-in quorum: number of valid MAGI results required to select a plan.
+  # 3 = all three; anything lower must be an explicit platform/profile choice.
+  min_valid_magi_results: 3
+  rubric:
+    requirement_fit: 3
+    simplicity: 2
+    risk: 2
+    operability: 1
+    testability: 2
+    maintainability: 1
+  tie_break: [fewer_planned_changes, fewer_assumptions, magi_order]
+  tie_epsilon: 0.05
+
+project_config:
+  on_invalid: deny  # deny | discover
+
+publication:
+  allowed_modes: [local_candidate, patch]
+
+execution:
+  default_runner: container
+  allowed_runners: [container]
+  container:
+    default_images:
+      python: "docker.io/library/python:3.13-slim"
+      node: "docker.io/library/node:22-slim"
+      shell: "docker.io/library/debian:bookworm-slim"
+    image_allowlist_prefixes: ["docker.io/library/"]
+    memory: "1g"
+    pids_limit: 256
+    network: none
+
+profiles:
+  default: {}
+  # Explicit development profile: runs target commands on the host WITHOUT a sandbox.
+  local-dev:
+    execution:
+      default_runner: local
+      allowed_runners: [local, container]
+  # Profile used by offline tests and the demo: local runner, quorum unchanged.
+  offline-test:
+    execution:
+      default_runner: local
+      allowed_runners: [local]
+  # Explicitly allows proceeding with 2 of 3 MAGI results.
+  quorum-2:
+    decision:
+      min_valid_magi_results: 2
+  # Same explicit 2-of-3 quorum, with the local runner, for offline tests and demos.
+  offline-test-quorum-2:
+    execution:
+      default_runner: local
+      allowed_runners: [local]
+    decision:
+      min_valid_magi_results: 2

@@ -1,0 +1,17 @@
+# Example `.magi/config.yaml` for a TARGET repository. Descriptive only: it cannot
+# disable gates, raise permissions, enable secrets, network, push, merge or deploy.
+version: 1
+languages: [shell]
+code_paths: ["src/**"]
+test_paths: ["tests/**"]
+doc_paths: ["docs/**", "README.md", "CHANGELOG.md"]
+generated_paths: []
+write_scopes: ["src/**", "tests/**"]      # optional narrowing of what developers may write
+commands:                                 # run only through the policy-checked runner
+  build: {run: "make build"}
+  test: {run: "make test", timeout_seconds: 120}
+  lint: {run: "make lint"}
+doc_conventions: "Diátaxis; reference pages under docs/"
+container_image: "docker.io/library/debian:bookworm-slim"   # must match the platform image allowlist
+not_applicable:                           # honoured only for gates the platform policy allows
+  project.build: "interpreted shell scripts; no build step beyond syntax check"

@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+      - run: uv sync --frozen
+      - run: uv run ruff check src tests
+      # Lets the real ContainerRunner test run (tests never pull images themselves).
+      - run: podman pull docker.io/library/debian:bookworm-slim
+      - run: uv run pytest -rs
+
+  action-selftest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@v7
+      - name: Create a demo target repository outside the checkout
+        run: |
+          uv run --frozen python -c "from pathlib import Path; from magi_system.offline import create_demo_repo, DEMO_REQUEST; create_demo_repo(Path('$RUNNER_TEMP/greeter')); Path('$RUNNER_TEMP/request.md').write_text(DEMO_REQUEST)"
+      - id: magi
+        uses: ./
+        with:
+          repo-path: ${{ runner.temp }}/greeter
+          ref: main
+          request-file: ${{ runner.temp }}/request.md
+          profile: local-dev
+          offline: "true"
+      - name: Check outcome
+        env:
+          STATUS: ${{ steps.magi.outputs.status }}
+          PATCH: ${{ steps.magi.outputs.patch }}
+        run: |
+          test "$STATUS" = SUCCESS
+          grep -q 'farewell()' "$PATCH"

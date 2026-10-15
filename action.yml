@@ -1,0 +1,96 @@
+name: MAGI System
+description: >-
+  Run a MAGI change on this repository: three architects plan, DEV1/DEV2 implement, QA/SRE/Security
+  verify, a deterministic gate decides. Produces a verified patch as an artifact; never pushes,
+  opens pull requests, merges or deploys.
+author: Lorenzo Girardi
+
+inputs:
+  request-file:
+    description: Markdown file with the change request (path relative to the workspace).
+    required: true
+  repo-path:
+    description: Path of the target Git repository (must be a full repository root).
+    default: .
+  ref:
+    description: Commit, branch or tag to start from.
+    default: ${{ github.sha }}
+  profile:
+    description: Authorized policy profile. `default` runs target commands in a container.
+    default: default
+  config:
+    description: Optional run settings YAML (budgets, models). Never put secrets in it.
+    default: ""
+  image:
+    description: Container image for target commands; must be allowlisted by the platform policy and match `container_image` in the target's .magi/config.yaml if set.
+    default: docker.io/library/debian:bookworm-slim
+  offline:
+    description: Use the scripted fake model (orchestration check only, no API key needed).
+    default: "false"
+
+outputs:
+  status:
+    description: Terminal status (SUCCESS, FAILED_VERIFICATION, UNRESOLVED_REQUIREMENT, POLICY_DENIED, INFRA_FAILURE, BUDGET_EXHAUSTED).
+    value: ${{ steps.run.outputs.status }}
+  run-id:
+    description: Run identifier.
+    value: ${{ steps.run.outputs.run-id }}
+  patch:
+    description: Path of the verified candidate patch (empty unless SUCCESS).
+    value: ${{ steps.run.outputs.patch }}
+
+runs:
+  using: composite
+  steps:
+    - uses: astral-sh/setup-uv@v7
+      with:
+        enable-cache: true
+        cache-dependency-glob: ${{ github.action_path }}/uv.lock
+
+    - name: Pull container image
+      if: inputs.profile == 'default'
+      shell: bash
+      env:
+        IMAGE: ${{ inputs.image }}
+      run: |
+        if command -v podman >/dev/null; then podman pull "$IMAGE"; else docker pull "$IMAGE"; fi
+
+    - name: Run MAGI
+      id: run
+      shell: bash
+      env:
+        MAGI_PLATFORM_REF: ${{ github.action_ref || github.sha }}
+        MAGI_RUNS_ROOT: ${{ runner.temp }}/magi-runs
+        INPUT_REQUEST_FILE: ${{ inputs.request-file }}
+        INPUT_REPO_PATH: ${{ inputs.repo-path }}
+        INPUT_REF: ${{ inputs.ref }}
+        INPUT_PROFILE: ${{ inputs.profile }}
+        INPUT_CONFIG: ${{ inputs.config }}
+        INPUT_OFFLINE: ${{ inputs.offline }}
+      run: |
+        set -uo pipefail
+        args=(--repo "$(realpath "$INPUT_REPO_PATH")" --ref "$INPUT_REF" --request-file "$(realpath "$INPUT_REQUEST_FILE")" --profile "$INPUT_PROFILE")
+        [ -n "$INPUT_CONFIG" ] && args+=(--config "$(realpath "$INPUT_CONFIG")")
+        extra="--extra=anthropic"
+        if [ "$INPUT_OFFLINE" = "true" ]; then args+=(--offline); extra="--no-dev"; fi
+        out="$RUNNER_TEMP/magi-outcome.json"
+        uv run --quiet --project "$GITHUB_ACTION_PATH" --frozen "$extra" magi run "${args[@]}" > "$out"
+        code=$?
+        if [ ! -s "$out" ]; then echo "::error::MAGI could not start (exit $code)"; exit "$code"; fi
+        run_id=$(jq -r .run_id "$out"); status=$(jq -r .status "$out")
+        patch=""; [ "$(jq -r .patch_ref "$out")" != "" ] && patch="$MAGI_RUNS_ROOT/$run_id/$(jq -r .patch_ref "$out")"
+        { echo "run-id=$run_id"; echo "status=$status"; echo "patch=$patch"; } >> "$GITHUB_OUTPUT"
+        report="$MAGI_RUNS_ROOT/$run_id/artifacts/report.md"
+        [ -f "$report" ] && cat "$report" >> "$GITHUB_STEP_SUMMARY"
+        [ "$status" = "SUCCESS" ] || echo "::error::MAGI run $run_id ended with $status: $(jq -r .diagnosis "$out" | head -c 500)"
+        exit "$code"
+
+    - name: Upload MAGI artifacts
+      if: always() && steps.run.outputs.run-id != ''
+      uses: actions/upload-artifact@v7
+      with:
+        name: magi-${{ steps.run.outputs.run-id }}
+        path: |
+          ${{ runner.temp }}/magi-runs/${{ steps.run.outputs.run-id }}/artifacts/
+          ${{ runner.temp }}/magi-runs/${{ steps.run.outputs.run-id }}/events.jsonl
+          ${{ runner.temp }}/magi-outcome.json
