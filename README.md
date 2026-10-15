@@ -1,23 +1,70 @@
 # magi-system
 
-Autonomous, policy-bounded software change platform built on LangGraph. Three
-independent architects — **Melchior-Magi 1**, **Balthasar-Magi 2**, **Casper-Magi 3** —
-analyze a change request and propose plans; code (not a vote) verifies their claims with
-tools, selects an admissible plan, and drives implementation (DEV1 writer → DEV2 pair),
-QA/SRE/Security verification, documentation and a final review to a deterministic gate.
+## Goal
 
-No human-in-the-loop, and no unlimited authority: a run ends in a verified local
-candidate (patch + branch) or an explicit failure state. Push, merge and deployment are
-never performed.
+Give magi-system a software change request and a Git repository, and it delivers the change
+**autonomously**, with no human in the loop, while staying inside strict, code-enforced limits.
+Every run ends in one of two ways:
 
-> The names come from the MAGI System of *Neon Genesis Evangelion*: only the names and
-> the plurality of perspectives. Agents are enterprise professionals, not characters.
+- a **verified candidate**: a patch and a local branch that passed every mandatory check
+  (build, tests, lint, acceptance, security, operations, documentation, final review);
+- an **explicit failure state** with a diagnosis (failed verification, unresolved requirement,
+  policy denied, infrastructure failure, budget exhausted).
+
+It never pushes, merges or deploys. Those stay a separate, human-authorized step.
+
+The core idea: a single LLM designing a change can be confidently wrong. magi-system asks
+**three independent architects** to analyze the request and propose a plan, then lets code,
+not a vote, decide which plan is acceptable. Every factual claim an architect makes (a file
+exists, a function exists, a dependency version is available, a policy allows something) is
+checked against the real repository with tools. A plan built on a false claim, an unresolved
+critical unknown or a confirmed blocker is rejected, however many architects support it.
+
+## The three architects
+
+All three are complete enterprise architects: each one considers requirements, existing code,
+data and APIs, security, reliability, cost, migration and rollback, testing and documentation.
+They differ in where they look first, so their proposals and reviews catch different problems.
+
+| Architect | Primary perspective | Typical question |
+|---|---|---|
+| **Melchior-Magi 1** | Evolution of the existing system: reuse, simplicity, the minimum change that works, compatibility. | "What is the smallest safe change that fits the code we already have?" |
+| **Balthasar-Magi 2** | System behavior: data consistency, failure modes, dependencies, observability and recovery. | "What breaks, and how do we notice and recover when it does?" |
+| **Casper-Magi 3** | Challenge: hidden assumptions, alternative designs, trust boundaries, unnecessary scope. | "What are we assuming, and is there a simpler or safer way?" |
+
+How they work together:
+
+1. Each architect analyzes the request **independently**, with read-only access to the
+   repository and without seeing the others' work.
+2. Each produces a complete proposal.
+3. Each scores the **other two** proposals with authors masked (never its own).
+4. QA, SRE and Security review the proposals before any code is written.
+5. Tools verify the claims; code computes which proposals are admissible and ranks them.
+6. After implementation, the same three roles review the final result in a fresh context.
+
+Their perspectives are a starting point, not exclusive competences: Casper does not invent
+objections to justify its role, and an objection without checkable evidence is never a veto.
+
+## What happens in a run
+
+```
+request -> 3 architects (analysis, proposals, cross-review) -> plan selected by code
+        -> DEV1 writes -> DEV2 pairs -> QA / SRE / Security verify
+        -> Tech Writer documents -> 3 architects review -> deterministic gate
+```
+
+Problems found along the way are routed back automatically: a local bug to the developer who
+introduced it, an architectural problem to the architects, a documentation gap to the Tech
+Writer. Every loop has a budget.
+
+> The names come from the MAGI System of *Neon Genesis Evangelion*: only the names and the
+> plurality of perspectives. Agents behave as enterprise professionals, not characters.
 
 ## Quick start (offline, no API key)
 
 ```sh
 uv sync
-uv run magi demo          # temp target repo → MAGI → writer → pair → checks → docs → gate
+uv run magi demo          # temp target repo -> MAGI -> writer -> pair -> checks -> docs -> gate
 uv run pytest             # offline, deterministic test suite
 ```
 
@@ -85,10 +132,10 @@ Uploads the verified patch and report as an artifact; never pushes. See
 
 ## Documentation
 
-- [Architecture](docs/architecture.md) — repositories, components, graph, decision protocol.
-- [State, failures and resume](docs/state-and-failures.md) — state model, terminal states, fix loops, budgets, resume rules.
-- [Security model](docs/security.md) — trust boundaries, what is and is not a sandbox.
-- [Providers](docs/providers.md) — configuring real LLMs.
-- [GitHub Actions](docs/github-actions.md) — composite action, example workflow, security rules.
-- [Known limits](docs/limits.md) — what is not implemented.
-- [Brief](docs/brief/) — the normative specification this implements.
+- [Architecture](docs/architecture.md): repositories, components, graph, decision protocol.
+- [State, failures and resume](docs/state-and-failures.md): state model, terminal states, fix loops, budgets, resume rules.
+- [Security model](docs/security.md): trust boundaries, what is and is not a sandbox.
+- [Providers](docs/providers.md): configuring real LLMs.
+- [GitHub Actions](docs/github-actions.md): composite action, example workflow, security rules.
+- [Known limits](docs/limits.md): what is not implemented.
+- [Brief](docs/brief/): the normative specification this implements.
