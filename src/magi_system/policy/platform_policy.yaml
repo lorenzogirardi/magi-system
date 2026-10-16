@@ -105,6 +105,12 @@ execution:
 
 profiles:
   default: {}
+  # Hosted on Amazon Bedrock AgentCore: target commands run in a Code Interpreter sandbox
+  # that mounts only the run's workspace (see docs/agentcore/security.md). No local or container runner.
+  agentcore:
+    execution:
+      default_runner: codeinterpreter
+      allowed_runners: [codeinterpreter]
   # Explicit development profile: runs target commands on the host WITHOUT a sandbox.
   local-dev:
     execution:

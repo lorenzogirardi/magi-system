@@ -1,0 +1,174 @@
+"""CodeInterpreterRunner with fake AgentCore/EFS clients (no AWS calls)."""
+
+import pytest
+
+from magi_system.execution import CodeInterpreterRunner, make_runner
+from magi_system.policy import PolicyEngine
+
+ENV = {
+    "MAGI_CI_IDENTIFIER": "magi_ci-abc123",
+    "MAGI_EFS_FILE_SYSTEM_ID": "fs-0123",
+    "MAGI_EFS_FILE_SYSTEM_ARN": "arn:aws:elasticfilesystem:eu-west-1:000000000000:file-system/fs-0123",
+    "MAGI_EFS_RUNS_PATH": "/magi",
+    "MAGI_CI_TOOLCHAIN_PATH": "/mnt/ws/.toolchain/bin:/usr/bin:/bin",
+}
+
+
+class FakeEfs:
+    def __init__(self):
+        self.created, self.deleted, self.aps = [], [], []
+
+    def describe_access_points(self, **kw):
+        if "AccessPointId" in kw:
+            return {"AccessPoints": [a for a in self.aps if a["AccessPointId"] == kw["AccessPointId"]]}
+        return {"AccessPoints": list(self.aps)}
+
+    def create_access_point(self, **kw):
+        self.created.append(kw)
+        ap = {**kw, "AccessPointId": f"fsap-{len(self.created)}", "AccessPointArn": f"arn:ap/{len(self.created)}", "LifeCycleState": "available"}
+        self.aps.append(ap)
+        return ap
+
+    def delete_access_point(self, AccessPointId):
+        self.deleted.append(AccessPointId)
+        self.aps = [a for a in self.aps if a["AccessPointId"] != AccessPointId]
+
+
+class FakeAgentCore:
+    def __init__(self, result=None, fail_first=False):
+        self.sessions, self.invocations, self.stopped = [], [], []
+        self.result = result or {"stdout": "hello\n", "stderr": "", "exitCode": 0}
+        self.fail_first = fail_first
+
+    def start_code_interpreter_session(self, **kw):
+        self.sessions.append(kw)
+        return {"sessionId": f"s-{len(self.sessions)}", "codeInterpreterIdentifier": kw["codeInterpreterIdentifier"]}
+
+    def invoke_code_interpreter(self, **kw):
+        self.invocations.append(kw)
+        if self.fail_first and len(self.invocations) == 1:
+            raise RuntimeError("session expired")
+        return {"sessionId": kw["sessionId"], "stream": [{"result": {"content": [], "structuredContent": self.result, "isError": False}}]}
+
+    def stop_code_interpreter_session(self, **kw):
+        self.stopped.append(kw["sessionId"])
+
+
+@pytest.fixture
+def ws(tmp_path):
+    d = tmp_path / "runs" / "run-x" / "workspace"
+    (d / "sub").mkdir(parents=True)
+    return d
+
+
+def runner(ws, agentcore=None, efs=None, env=ENV):
+    agentcore, efs = agentcore or FakeAgentCore(), efs or FakeEfs()
+    return CodeInterpreterRunner(PolicyEngine("agentcore"), ws, env=env, clients=(agentcore, efs)), agentcore, efs
+
+
+def test_runs_command_in_per_run_sandbox(ws):
+    r, ac, efs = runner(ws)
+    res = r.run("sh ok.sh", cwd=ws)
+    assert res.ok and res.stdout == "hello\n" and res.runner == "codeinterpreter"
+    assert res.environment_id == "codeinterpreter:magi_ci-abc123"
+    # the access point is rooted at THIS run's workspace and nothing wider
+    (ap,) = efs.created
+    assert ap["RootDirectory"]["Path"] == "/magi/run-x/workspace"
+    assert {"Key": "magi-run", "Value": "run-x"} in ap["Tags"]
+    (sess,) = ac.sessions
+    (fs,) = sess["filesystemConfigurations"]
+    assert fs["efsConfiguration"]["accessPointArn"] == "arn:ap/1" and fs["efsConfiguration"]["mountPath"] == "/mnt/ws"
+    cmd = ac.invocations[0]["arguments"]["command"]
+    assert ac.invocations[0]["name"] == "executeCommand"
+    assert cmd.startswith("cd /mnt/ws && exec env -i PATH=/mnt/ws/.toolchain/bin:/usr/bin:/bin HOME=/tmp")
+    assert cmd.endswith("timeout -k 5 300 sh ok.sh")
+
+
+def test_session_and_access_point_are_reused(ws):
+    r, ac, efs = runner(ws)
+    r.run("sh a.sh", cwd=ws)
+    r.run("sh b.sh", cwd=ws / "sub")
+    assert len(ac.sessions) == 1 and len(efs.created) == 1
+    assert ac.invocations[1]["arguments"]["command"].startswith("cd /mnt/ws/sub && ")
+
+
+def test_existing_access_point_for_run_is_reused_on_resume(ws):
+    efs = FakeEfs()
+    first, _, _ = runner(ws, efs=efs)
+    first.run("sh a.sh", cwd=ws)
+    second, _, _ = runner(ws, efs=efs)  # a resumed run in a new process
+    second.run("sh a.sh", cwd=ws)
+    assert len(efs.created) == 1
+
+
+def test_arguments_are_shell_quoted(ws):
+    r, ac, _ = runner(ws)
+    r.run(["python", "-c", "print('a; rm -rf ~')"], cwd=ws)
+    assert ac.invocations[0]["arguments"]["command"].endswith("""python -c 'print('"'"'a; rm -rf ~'"'"')'""")
+
+
+def test_denied_command_never_reaches_the_sandbox(ws):
+    r, ac, efs = runner(ws)
+    res = r.run("curl http://example.org", cwd=ws)
+    assert res.denied and not ac.invocations and not ac.sessions and not efs.created
+
+
+def test_cwd_outside_workspace_denied(ws, tmp_path):
+    r, ac, _ = runner(ws)
+    assert r.run("sh ok.sh", cwd=tmp_path).denied and not ac.invocations
+
+
+def test_nonzero_exit_and_output_redaction(ws, monkeypatch):
+    monkeypatch.setenv("SERVICE_API_KEY", "supersecretvalue123")
+    r, _, _ = runner(ws, FakeAgentCore({"stdout": "key=supersecretvalue123", "stderr": "boom", "exitCode": 3}))
+    res = r.run("sh ok.sh", cwd=ws)
+    assert res.exit_code == 3 and not res.ok and res.stderr == "boom"
+    assert "supersecretvalue123" not in res.stdout
+
+
+def test_missing_exit_code_is_not_success(ws):
+    r, _, _ = runner(ws, FakeAgentCore({"stdout": "", "stderr": ""}))
+    res = r.run("sh ok.sh", cwd=ws)
+    assert res.exit_code is None and not res.ok and "no exit code" in res.stderr
+
+
+def test_timeout_exit_maps_to_timed_out(ws, monkeypatch):
+    r, ac, _ = runner(ws, FakeAgentCore({"stdout": "", "stderr": "", "exitCode": 124}))
+    times = [0.0]  # first call = start; every later call is 400 s later
+    monkeypatch.setattr("magi_system.execution.runner.time.monotonic", lambda: times.pop(0) if len(times) > 1 else 400.0)
+    times.append(400.0)
+    res = r.run("sh slow.sh", cwd=ws, timeout=300)
+    assert res.timed_out and res.exit_code is None
+
+
+def test_timeout_is_capped_below_the_sync_invoke_limit(ws):
+    r, ac, _ = runner(ws)
+    r.run("sh ok.sh", cwd=ws, timeout=3600)
+    assert "timeout -k 5 840 " in ac.invocations[0]["arguments"]["command"]
+
+
+def test_expired_session_is_restarted_once(ws):
+    r, ac, _ = runner(ws, FakeAgentCore(fail_first=True))
+    assert r.run("sh ok.sh", cwd=ws).ok
+    assert len(ac.sessions) == 2
+
+
+def test_close_stops_session_and_deletes_access_point(ws):
+    r, ac, efs = runner(ws)
+    r.run("sh ok.sh", cwd=ws)
+    r.close()
+    r.close()  # idempotent
+    assert ac.stopped == ["s-1"] and efs.deleted == ["fsap-1"]
+
+
+def test_unconfigured_runner_is_unavailable(ws):
+    r, _, _ = runner(ws, env={})
+    assert not r.available() and "MAGI_CI_IDENTIFIER" in r.unavailable_hint()
+
+
+def test_agentcore_profile_allows_only_code_interpreter(ws):
+    policy = PolicyEngine("agentcore")
+    assert isinstance(make_runner(policy, ws), CodeInterpreterRunner)
+    for other in ("local", "container"):
+        with pytest.raises(PermissionError):
+            make_runner(policy, ws, runner=other)

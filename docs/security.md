@@ -40,7 +40,27 @@ docker the container runs as the caller's uid/gid so workspace files stay owned 
 caller. A run with the container runner refuses to start if the image is not present
 locally (the platform never pulls).
 
+- **CodeInterpreterRunner** (`agentcore` profile only): every command runs in an Amazon
+  Bedrock AgentCore Code Interpreter session.
+  - The session mounts only this run's workspace, through a per-run EFS access point.
+  - It runs in subnets without internet access.
+  - Its execution role can do nothing but that EFS mount.
+  - The command environment is emptied (`env -i`), and the command gets a timeout and
+    quoted arguments.
+  - The policy check happens before anything is sent.
+  - Details: [agentcore/security.md](agentcore/security.md).
+
 GitHub Actions trigger rules are in [github-actions.md](github-actions.md).
+
+## Hosted deployment (AgentCore)
+
+- Callers can request only the profiles in `MAGI_ALLOWED_PROFILES` (default `agentcore`),
+  and only the model providers in `MAGI_ALLOWED_PROVIDERS` (default `openrouter`). So a
+  hosted run can neither pick the unsandboxed LocalRunner nor use any model backend other
+  than OpenRouter. No IAM role in the Terraform can invoke Amazon Bedrock models.
+- The OpenRouter key is read from Secrets Manager into the process environment at start,
+  before any redactor exists, so it is redacted like any environment secret. It is never
+  passed to the sandbox.
 
 ## Project configuration is not authorization
 

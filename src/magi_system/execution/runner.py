@@ -8,11 +8,15 @@ untrusted input and go through the same path.
 - `LocalRunner`: executes on the host with a scrubbed environment and a timeout.
   It is for development and offline tests only and is NOT a sandbox: the command runs
   with the caller's user privileges and can read anything that user can read.
+- `CodeInterpreterRunner` (AgentCore hosting, `agentcore` profile): runs each command in an
+  Amazon Bedrock AgentCore Code Interpreter session that mounts only this run's workspace
+  through a per-run EFS access point. See docs/agentcore/security.md.
 """
 
 from __future__ import annotations
 
 import os
+import shlex
 import shutil
 import signal
 import subprocess
@@ -49,6 +53,12 @@ class ExecutionRunner(Protocol):
     def environment_id(self) -> str: ...
 
     def run(self, command: str | list[str], *, cwd: Path, timeout: float | None = None) -> CommandResult: ...
+
+    def available(self) -> bool: ...
+
+    def unavailable_hint(self) -> str: ...
+
+    def close(self) -> None: ...
 
 
 def _truncate(text: str, limit: int) -> str:
@@ -95,6 +105,15 @@ class _BaseRunner:
 
     def environment_id(self) -> str:  # pragma: no cover - overridden
         return self.name
+
+    def available(self) -> bool:
+        return True
+
+    def unavailable_hint(self) -> str:
+        return ""
+
+    def close(self) -> None:
+        """Release run-scoped resources (sandbox sessions ...). Safe to call more than once."""
 
 
 class LocalRunner(_BaseRunner):
@@ -167,6 +186,10 @@ class ContainerRunner(_BaseRunner):
         r = subprocess.run([self.runtime, "image", "inspect", self.image], capture_output=True, env=self.cli_env())
         return r.returncode == 0
 
+    def unavailable_hint(self) -> str:
+        return (f"container image {self.image} is not present locally (or no container runtime found); "
+                f"pull it first: podman pull {self.image}  (or: docker pull {self.image})")
+
     def build_argv(self, argv: tuple[str, ...], cwd: Path) -> list[str]:
         rel = cwd.resolve().relative_to(self.workspace_root)
         # Docker runs as root by default: files it writes into the bind mount would become
@@ -200,6 +223,175 @@ class ContainerRunner(_BaseRunner):
             return self._finish(argv, None, exc.stdout or "", exc.stderr or "", started, timed_out=True)
 
 
+class CodeInterpreterRunner(_BaseRunner):
+    """Runs commands in an AgentCore Code Interpreter session (managed sandbox).
+
+    Isolation: the session mounts a per-run EFS access point rooted at this run's workspace
+    (nothing wider), runs in subnets without internet access, and its execution role grants
+    only that EFS mount. Each command gets an empty environment (`env -i`) and a timeout.
+    Configuration comes only from environment variables (`CONFIG_ENV`), never from the policy.
+    """
+
+    name = "codeinterpreter"
+    MOUNT = "/mnt/ws"
+    # InvokeCodeInterpreter is synchronous and capped at 15 minutes; keep a margin.
+    MAX_SYNC_SECONDS = 840.0
+    CONFIG_ENV = {
+        "identifier": "MAGI_CI_IDENTIFIER",
+        "file_system_id": "MAGI_EFS_FILE_SYSTEM_ID",
+        "file_system_arn": "MAGI_EFS_FILE_SYSTEM_ARN",
+        "runs_path": "MAGI_EFS_RUNS_PATH",  # EFS path that holds run directories (runs_root on EFS)
+    }
+
+    def __init__(self, policy: PolicyEngine, workspace_root: Path, *, env: dict[str, str] | None = None,
+                 clients: tuple | None = None) -> None:
+        super().__init__(policy, workspace_root)
+        env = os.environ if env is None else env
+        self.cfg = {k: env.get(v, "") for k, v in self.CONFIG_ENV.items()}
+        self.uid = int(env.get("MAGI_EFS_POSIX_UID", "1000"))
+        self.gid = int(env.get("MAGI_EFS_POSIX_GID", "1000"))
+        self.toolchain_path = env.get("MAGI_CI_TOOLCHAIN_PATH", "/usr/local/bin:/usr/bin:/bin")
+        self.session_timeout = int(env.get("MAGI_CI_SESSION_TIMEOUT_SECONDS", "28800"))
+        self.run_id = self.workspace_root.parent.name
+        self._clients = clients
+        self._access_point: dict | None = None
+        self._session_id = ""
+
+    def environment_id(self) -> str:
+        return f"codeinterpreter:{self.cfg['identifier'] or 'unconfigured'}"
+
+    def missing_config(self) -> list[str]:
+        return [self.CONFIG_ENV[k] for k, v in self.cfg.items() if not v]
+
+    def available(self) -> bool:
+        return not self.missing_config()
+
+    def unavailable_hint(self) -> str:
+        return f"Code Interpreter runner is not configured; missing environment variables: {', '.join(self.missing_config())}"
+
+    # -- AWS resources --------------------------------------------------------------------
+
+    def _aws(self):
+        if self._clients is None:
+            import boto3
+
+            self._clients = (boto3.client("bedrock-agentcore"), boto3.client("efs"))
+        return self._clients
+
+    @property
+    def efs_root(self) -> str:
+        return f"{self.cfg['runs_path'].rstrip('/')}/{self.run_id}/workspace"
+
+    def _ensure_access_point(self) -> dict:
+        if self._access_point:
+            return self._access_point
+        _, efs = self._aws()
+        tag = {"Key": "magi-run", "Value": self.run_id}
+        found, token = [], None
+        while True:  # an access point left by an interrupted process is reused on resume
+            page = efs.describe_access_points(FileSystemId=self.cfg["file_system_id"], **({"NextToken": token} if token else {}))
+            found += [ap for ap in page.get("AccessPoints", [])
+                      if tag in ap.get("Tags", []) and ap.get("RootDirectory", {}).get("Path") == self.efs_root]
+            token = page.get("NextToken")
+            if not token:
+                break
+        ap = found[0] if found else efs.create_access_point(
+            FileSystemId=self.cfg["file_system_id"],
+            PosixUser={"Uid": self.uid, "Gid": self.gid},
+            RootDirectory={"Path": self.efs_root,
+                           "CreationInfo": {"OwnerUid": self.uid, "OwnerGid": self.gid, "Permissions": "0755"}},
+            Tags=[tag, {"Key": "Name", "Value": f"magi-{self.run_id}"}],
+        )
+        deadline = time.monotonic() + 60
+        while ap.get("LifeCycleState", "available") != "available":
+            if time.monotonic() > deadline:
+                raise OSError(f"EFS access point {ap['AccessPointId']} not available after 60 s")
+            time.sleep(1)
+            ap = efs.describe_access_points(AccessPointId=ap["AccessPointId"])["AccessPoints"][0]
+        self._access_point = ap
+        return ap
+
+    def _ensure_session(self) -> str:
+        if self._session_id:
+            return self._session_id
+        ap = self._ensure_access_point()
+        agentcore, _ = self._aws()
+        resp = agentcore.start_code_interpreter_session(
+            codeInterpreterIdentifier=self.cfg["identifier"],
+            name=f"magi-{self.run_id}"[:100],
+            sessionTimeoutSeconds=self.session_timeout,
+            filesystemConfigurations=[{"efsConfiguration": {
+                "accessPointArn": ap["AccessPointArn"], "fileSystemArn": self.cfg["file_system_arn"], "mountPath": self.MOUNT}}],
+        )
+        self._session_id = resp["sessionId"]
+        return self._session_id
+
+    # -- execution ------------------------------------------------------------------------
+
+    def remote_command(self, argv: tuple[str, ...], cwd: Path, timeout: float) -> str:
+        rel = cwd.resolve().relative_to(self.workspace_root)
+        remote_cwd = self.MOUNT if str(rel) == "." else f"{self.MOUNT}/{rel.as_posix()}"
+        env = f"PATH={self.toolchain_path} HOME=/tmp LANG=C.UTF-8 CI=1 MAGI_RUNNER={self.name}"
+        return (f"cd {shlex.quote(remote_cwd)} && exec env -i {env} "
+                f"timeout -k 5 {int(timeout)} {shlex.join(argv)}")
+
+    @staticmethod
+    def parse(resp: dict) -> tuple[int | None, str, str]:
+        """(exit code, stdout, stderr) from an executeCommand response; exit None if absent."""
+        out, err, code = [], [], None
+        for event in resp.get("stream", []):
+            if "result" not in event:
+                problem = next(iter(event), "unknown event")
+                err.append(f"codeinterpreter: {problem}: {event.get(problem, '')}")
+                continue
+            sc = event["result"].get("structuredContent") or {}
+            out.append(sc.get("stdout") or "")
+            err.append(sc.get("stderr") or "")
+            if sc.get("exitCode") is not None:
+                code = int(sc["exitCode"])
+        if code is None:
+            err.append("codeinterpreter: response carried no exit code")
+        return code, "".join(out), "\n".join(e for e in err if e)
+
+    def run(self, command, *, cwd: Path, timeout: float | None = None) -> CommandResult:
+        argv, denied = self._check(command, cwd)
+        if denied:
+            return denied
+        started = time.monotonic()
+        limit = min(timeout or self.default_timeout, self.MAX_SYNC_SECONDS)
+        script = self.remote_command(argv, cwd, limit)
+        agentcore, _ = self._aws()
+        resp = None
+        for attempt in (1, 2):  # a second attempt with a fresh session if the old one expired
+            try:
+                resp = agentcore.invoke_code_interpreter(
+                    codeInterpreterIdentifier=self.cfg["identifier"], sessionId=self._ensure_session(),
+                    name="executeCommand", arguments={"command": script},
+                )
+                break
+            except Exception as exc:  # boto ClientError, connection errors
+                self._session_id = ""
+                if attempt == 2:
+                    return self._finish(argv, None, "", f"codeinterpreter invocation failed: {type(exc).__name__}: {exc}", started)
+        code, out, err = self.parse(resp)
+        # coreutils `timeout` exits 124 (137 after -k) when it had to stop the command.
+        return self._finish(argv, code, out, err, started, timed_out=code in (124, 137) and time.monotonic() - started >= limit)
+
+    def close(self) -> None:
+        if self._clients is None:
+            return
+        agentcore, efs = self._clients
+        if self._session_id:
+            try:
+                agentcore.stop_code_interpreter_session(codeInterpreterIdentifier=self.cfg["identifier"], sessionId=self._session_id)
+            except Exception:
+                pass  # the session times out by itself
+            self._session_id = ""
+        if self._access_point:
+            efs.delete_access_point(AccessPointId=self._access_point["AccessPointId"])
+            self._access_point = None
+
+
 def make_runner(policy: PolicyEngine, workspace_root: Path, *, runner: str | None = None, image: str = "") -> ExecutionRunner:
     choice = runner or policy.effective["execution"]["default_runner"]
     if not policy.runner_allowed(choice):
@@ -208,4 +400,6 @@ def make_runner(policy: PolicyEngine, workspace_root: Path, *, runner: str | Non
         return LocalRunner(policy, workspace_root)
     if choice == "container":
         return ContainerRunner(policy, workspace_root, image or policy.effective["execution"]["container"]["default_images"]["shell"])
+    if choice == "codeinterpreter":
+        return CodeInterpreterRunner(policy, workspace_root)
     raise ValueError(f"unknown runner {choice!r}")

@@ -36,3 +36,14 @@
   and open connections are reset on wake. A run left unattended can hang until wake and
   then lose its in-flight model calls (reported as retryable `provider_error`). Keep the
   machine awake for the duration of the run: `caffeinate -i uv run magi run ...`.
+- **AgentCore hosting is not deployed.** Under `deploy/agentcore/` there are code, image,
+  Terraform and docs, tested offline only:
+  - The DynamoDB store is tested under moto.
+  - The Code Interpreter runner is tested with fake clients.
+  - The entrypoint is tested directly and through a local container smoke test.
+  - Terraform passes `validate` only, with no `plan` or `apply`.
+
+  Items still to prove on AWS: the Code Interpreter response shape, the sandbox toolchain,
+  and git/flock on EFS. The [spike checklist](agentcore/testing.md#spike-checklist-before-the-first-real-run)
+  lists every item. A sandbox command is capped at 840 s. Hosted runs clone public
+  repositories only, since there is no Git credential helper yet.

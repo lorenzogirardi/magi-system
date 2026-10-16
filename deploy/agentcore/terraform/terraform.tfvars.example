@@ -1,0 +1,11 @@
+# Copy to terraform.tfvars (not committed) and fill in. No secrets here: the OpenRouter key
+# is put into Secrets Manager after apply (see docs/agentcore/deploy.md).
+region    = ""          # a Region where AgentCore Runtime + Code Interpreter are available
+image_tag = ""          # tag pushed to the ECR repository output by this module
+# name                = "magi"
+# az_count            = 2
+# max_session_seconds = 28800
+# checkpoint_ttl_days = 30
+# run_settings_file   = ""   # path inside the image; empty = callers send `settings` per run
+# ci_toolchain_path   = "/usr/local/bin:/usr/bin:/bin"
+# tags                = {}

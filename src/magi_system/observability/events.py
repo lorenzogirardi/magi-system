@@ -1,12 +1,15 @@
 """Structured event log (JSONL per run), optionally mirrored to Langfuse.
 
 Every event is redacted before it is written. Langfuse is optional: `LangfuseTracer`
-imports the SDK lazily and is only created when tracing is enabled.
+imports the SDK lazily and is only created when tracing is enabled. `MAGI_EVENTS_STDOUT=1`
+also prints each redacted event as one JSON line on stdout (hosted runs: CloudWatch).
 """
 
 from __future__ import annotations
 
 import json
+import os
+import sys
 import threading
 import time
 from pathlib import Path
@@ -40,6 +43,7 @@ class EventLog:
         self.redactor = redactor or Redactor()
         self._lock = threading.Lock()
         self.memory: list[dict[str, Any]] = []
+        self.stdout = os.environ.get("MAGI_EVENTS_STDOUT") == "1"
         if path is not None:
             path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -51,6 +55,8 @@ class EventLog:
             if self.path is not None:
                 with self.path.open("a") as fh:
                     fh.write(line + "\n")
+            if self.stdout:
+                print(line, file=sys.stdout, flush=True)
         if self.tracer is not None:
             self.tracer.event(event, record)
 

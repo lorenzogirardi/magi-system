@@ -155,6 +155,7 @@ Nothing environment-specific or secret lives in the code:
 | Budgets, models | Settings file passed with `--config` (`examples/settings.example.yaml`). |
 | Target project description | Optional `.magi/config.yaml` in the target (`examples/magi-config.example.yaml`). |
 | Runs location | `--runs-root` or `MAGI_RUNS_ROOT`. |
+| Run store | `MAGI_STORE`: `sqlite` (default, `<runs-root>/magi.sqlite`) or `dynamodb` (hosted; see [docs/agentcore/](docs/agentcore/README.md)). |
 | Platform policy | `src/magi_system/policy/platform_policy.yaml` (protected; versioned with the platform). |
 
 Real providers: see [docs/providers.md](docs/providers.md).
@@ -173,6 +174,17 @@ Real providers: see [docs/providers.md](docs/providers.md).
 Uploads the verified patch and report as an artifact; never pushes. See
 [docs/github-actions.md](docs/github-actions.md) for inputs, image choice and security rules.
 
+## Hosted on AWS (Amazon Bedrock AgentCore)
+
+An optional deployment runs magi-system on managed AWS services only (no EC2):
+- AgentCore Runtime hosts the orchestrator.
+- AgentCore Code Interpreter is the command sandbox.
+- EFS holds the workspaces; DynamoDB holds the checkpoints.
+- Models are still called through OpenRouter only.
+
+It includes an image (`deploy/agentcore/Dockerfile`), a local smoke test and Terraform.
+**Implemented and tested offline; not deployed yet.** See [docs/agentcore/](docs/agentcore/README.md).
+
 ## Documentation
 
 - [Architecture](docs/architecture.md): repositories, components, graph, decision protocol.
@@ -180,6 +192,7 @@ Uploads the verified patch and report as an artifact; never pushes. See
 - [Security model](docs/security.md): trust boundaries, what is and is not a sandbox.
 - [Providers](docs/providers.md): configuring real LLMs.
 - [GitHub Actions](docs/github-actions.md): composite action, example workflow, security rules.
+- [AgentCore hosting](docs/agentcore/README.md): managed AWS deployment, request flow, sandbox, Terraform, spike checklist.
 - [Known limits](docs/limits.md): what is not implemented.
 - [Brief](docs/brief/): the normative specification this implements.
 - [Case study: first SUCCESS on a real target](examples/run-20261015-205501-e0a70f/article.md)

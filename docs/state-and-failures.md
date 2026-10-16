@@ -116,7 +116,10 @@ inferred), and the execution environment id (`local:...` or `container:<runtime>
 
 ## Resume
 
-`magi resume --run-id X` checkpoints are per node (LangGraph `SqliteSaver`). Resume
+`magi resume --run-id X` checkpoints are per node: LangGraph `SqliteSaver` by default, or
+`DynamoDBSaver` (`langgraph-checkpoint-aws`) with `MAGI_STORE=dynamodb`. Both use the same
+strict serializer (no arbitrary class revival). On AgentCore, `resume` is an invocation that
+may run in a new session; see [agentcore/api.md](agentcore/api.md). Resume
 refuses if:
 
 - prompt manifest (name@version#sha) differs from the one recorded;
@@ -132,6 +135,7 @@ idempotent instead:
   does not call the agent again;
 - nodes that write start by restoring the workspace to their input commit, discarding
   partial writes;
-- publication (patch export) is recorded with a dedup key in the `effects` table.
+- publication (patch export) is recorded with a dedup key in the `effects` table (SQLite),
+  or as an `effect#<key>` item written with a conditional put (DynamoDB).
 
 A finished run is not re-run by `resume`; the recorded outcome is returned.

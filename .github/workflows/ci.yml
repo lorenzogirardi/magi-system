@@ -18,11 +18,24 @@ jobs:
       - uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
-      - run: uv sync --frozen
+      # The agentcore extra lets the DynamoDB (moto), Code Interpreter and entrypoint tests run.
+      - run: uv sync --frozen --extra agentcore
       - run: uv run ruff check src tests
       # Lets the real ContainerRunner test run (tests never pull images themselves).
       - run: podman pull docker.io/library/debian:bookworm-slim
       - run: uv run pytest -rs
+
+  terraform:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: hashicorp/setup-terraform@v4
+      # Static checks only: no backend, no AWS credentials, no plan/apply.
+      - run: terraform -chdir=deploy/agentcore/terraform fmt -check
+      - run: terraform -chdir=deploy/agentcore/terraform init -backend=false -input=false
+      - run: terraform -chdir=deploy/agentcore/terraform validate
 
   action-selftest:
     runs-on: ubuntu-latest

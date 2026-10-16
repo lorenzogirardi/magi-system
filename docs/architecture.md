@@ -14,8 +14,9 @@
 
 ```
 cli.py                 typer commands → RunService (no logic)
+interfaces/agentcore.py AgentCore Runtime entrypoint → RunService (async start/resume, status, report)
 service/app.py         RunService: start / resume / status / report; outcome; report files
-service/store.py       SQLite: run records, effect dedup, LangGraph SqliteSaver checkpoints
+service/store.py       run records, effect dedup, checkpoints: SQLite (default) or DynamoDB (MAGI_STORE)
 engine/graph.py        main StateGraph + subgraphs A–G
 engine/nodes_*.py      node functions (A intake, B magi, C impl, D/E/F verify/docs/final, triage+G gate)
 engine/state.py        JSON-native state + reducers
@@ -28,7 +29,7 @@ agents/                roster (ids, display names, perspectives) and the LLM cal
 llm/                   ModelAdapter protocol, ScriptedModel (offline), Anthropic adapter
 tools/toolbox.py       role-scoped tools; access enforced in code
 workspace/             Git wrapper and WorkspaceManager
-execution/runner.py    ExecutionRunner: ContainerRunner (default), LocalRunner (dev only)
+execution/runner.py    ExecutionRunner: ContainerRunner (default), CodeInterpreterRunner (AgentCore), LocalRunner (dev only)
 policy/                platform policy YAML + PolicyEngine
 config/project.py      .magi/config.yaml schema, discovery
 prompts/templates/     versioned prompts
@@ -36,8 +37,9 @@ observability/         redaction, JSONL event log, optional Langfuse mirror
 offline.py             demo target + scripted happy path for the fake model
 ```
 
-CLI, service, engine and workspace are separate so that a future interface (HTTP, CI
-job) reuses `RunService` without duplicating orchestration.
+CLI, service, engine and workspace are separate so that every interface reuses
+`RunService` without duplicating orchestration: the CLI, the GitHub Action (CLI) and the
+AgentCore entrypoint ([agentcore/](agentcore/README.md)).
 
 ## Graph
 

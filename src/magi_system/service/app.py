@@ -27,7 +27,7 @@ from magi_system.engine.budget import BudgetTracker
 from magi_system.engine.context import RunContext, control_fingerprint
 from magi_system.engine.graph import build_graph
 from magi_system.engine.state import INITIAL_KEYS
-from magi_system.execution.runner import ContainerRunner, make_runner
+from magi_system.execution.runner import make_runner
 from magi_system.llm.base import ModelAdapter
 from magi_system.llm.providers import make_adapter
 from magi_system.models.common import AgentId, content_hash
@@ -44,7 +44,7 @@ from magi_system.models.run import (
 )
 from magi_system.observability.events import EventLog, LangfuseTracer
 from magi_system.policy.engine import PolicyEngine, PolicyError
-from magi_system.service.store import RunStore
+from magi_system.service.store import open_store
 from magi_system.workspace.git import git
 from magi_system.workspace.manager import WorkspaceError, WorkspaceManager, control_repo_root
 
@@ -123,7 +123,7 @@ class RunService:
 
     def __post_init__(self) -> None:
         self.workspaces = WorkspaceManager(self.runs_root)
-        self.store = RunStore(self.workspaces.runs_root)
+        self.store = open_store(self.workspaces.runs_root)
         self.graph = build_graph(self.store.checkpointer)
 
     # -- wiring ---------------------------------------------------------------------------
@@ -220,14 +220,13 @@ class RunService:
                                               f"project configuration rejected: {exc}")
         record["project_config"] = project.model_dump(mode="json")
         ctx = self._context(run_id, run_input, settings, project, started_at, runner)
-        # A missing image would otherwise surface as failing checks and send developers
-        # chasing a non-existent bug. Check before any agent runs.
-        if isinstance(ctx.runner, ContainerRunner) and not ctx.runner.available():
+        # A missing image or sandbox configuration would otherwise surface as failing checks
+        # and send developers chasing a non-existent bug. Check before any agent runs.
+        if not ctx.runner.available():
+            hint = ctx.runner.unavailable_hint()
+            ctx.runner.close()
             self.workspaces.cleanup(run_id, keep_artifacts=False)
-            raise RunInputError(
-                f"container image {ctx.runner.image} is not present locally (or no container runtime found); "
-                f"pull it first: podman pull {ctx.runner.image}  (or: docker pull {ctx.runner.image})"
-            )
+            raise RunInputError(hint)
         self.store.create(run_id, record)
         record_env = {"environment_id": ctx.runner.environment_id()}
         self.store.update(run_id, **record_env)
@@ -306,6 +305,7 @@ class RunService:
                 return outcome
         finally:
             lock.close()
+            ctx.runner.close()
         outcome = self._outcome(run_id, ctx, final, publish=True)
         self.store.update(run_id, status=outcome.status.value, outcome=outcome.model_dump(mode="json"), resumable=False)
         ctx.events.emit("run_end", status=outcome.status.value, final_commit=outcome.final_commit, change_level=outcome.change_level.value)

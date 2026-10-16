@@ -17,9 +17,15 @@ dependencies = [
 [project.optional-dependencies]
 anthropic = ["anthropic>=0.70"]
 langfuse = ["langfuse>=3"]
+agentcore = [
+    "bedrock-agentcore>=1.24.1",
+    "boto3>=1.40",
+    "langgraph-checkpoint-aws>=1.2.5",
+]
 
 [project.scripts]
 magi = "magi_system.cli:app"
+magi-agentcore = "magi_system.interfaces.agentcore:main"
 
 [build-system]
 requires = ["uv_build>=0.11.25,<0.12.0"]
@@ -27,6 +33,7 @@ build-backend = "uv_build"
 
 [dependency-groups]
 dev = [
+    "moto[dynamodb,s3]>=5",
     "pytest>=9.1.1",
     "pytest-timeout>=2.4.0",
     "ruff>=0.17.0",

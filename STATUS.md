@@ -1,6 +1,6 @@
 # STATUS — magi-system
 
-Last updated: 2026-10-15 (session 4, OpenRouter provider + first local real-target prep).
+Last updated: 2026-10-16 (session 5, AgentCore hosting: implemented and tested offline, not deployed).
 
 ## State
 
@@ -109,16 +109,66 @@ Open items from the real runs:
 - `~/.magi/runs` contents disappeared during run 4 (cause unknown, outside magi-system);
   runs since use `--runs-root ~/magi-runs` with no recurrence.
 
+## Session 5 — Amazon Bedrock AgentCore hosting (offline only)
+
+Goal (user): run magi-system hosted on AWS with managed services only (no EC2). Models stay on
+OpenRouter (never Bedrock models). Container images must not be Alpine (Debian slim is fine).
+Reviewed first: Dify, rejected because it would replace the engine with a DSL and lose the
+guarantees. Docs: `docs/agentcore/`.
+
+Done, all offline (no AWS calls, no real LLM):
+- `MAGI_STORE=dynamodb`: `DynamoRunStore` (runs/effects table) + `DynamoDBSaver`
+  (`langgraph-checkpoint-aws` 1.2.5) with the same strict serializer, optional S3 offload and TTL.
+  Tested under moto, including a full run and a crash/resume.
+- `CodeInterpreterRunner` (`agentcore` profile, the only runner it allows):
+  - per-run EFS access point and Code Interpreter session
+  - `executeCommand` with `env -i`, timeout (840 s cap) and quoted argv
+  - policy checked before sending
+  - missing exit code = not PASS
+  - `close()` releases the session and the access point
+  - `RunService` now does a generic `available()` preflight and calls `runner.close()`.
+- `magi-agentcore` entrypoint (`interfaces/agentcore.py`):
+  - start/resume as AgentCore async tasks (`/ping` HealthyBusy), status, report (patch inline)
+  - one run per session
+  - `MAGI_ALLOWED_PROFILES` (default `agentcore`) and `MAGI_ALLOWED_PROVIDERS` (default `openrouter`)
+  - OpenRouter key from Secrets Manager
+  - events on stdout (`MAGI_EVENTS_STDOUT`).
+- `deploy/agentcore/Dockerfile`: `python:3.13-slim`, arm64, uid 1000. `deploy/agentcore/smoke.sh`:
+  podman build + real HTTP contract, start → HealthyBusy → SUCCESS → Healthy → report. **Passed.**
+- `deploy/agentcore/terraform/`:
+  - VPC (private subnets with NAT for the runtime, isolated subnets for the sandbox)
+  - EFS, DynamoDB, S3, ECR, Secrets Manager
+  - least-privilege IAM, with no Bedrock model access
+  - `aws_bedrockagentcore_agent_runtime` + `aws_bedrockagentcore_code_interpreter` (provider aws 6.69.1)
+  - `fmt -check` and `validate` pass. Never planned or applied.
+- CI: `uv sync --extra agentcore`; new `terraform` job (fmt/init/validate, no credentials).
+- Tests: **238 passed** (30 new). Lint is clean. `magi demo` reaches SUCCESS.
+
+Next (needs explicit approval, fake model only): the AWS spike in
+`docs/agentcore/testing.md#spike-checklist-before-the-first-real-run`. Key unknowns:
+- Code Interpreter `executeCommand` response and toolchain (no custom images; the fallback is
+  CodeBuild, designed but not built)
+- git/flock on EFS
+- IAM tag conditions
+- a 60-minute HealthyBusy session
+- cost
+
+Not implemented:
+- automatic resume
+- Git credentials for private targets
+- the CodeBuild runner
+
 ## What exists
 
 | Area | Where |
 |---|---|
 | CLI `magi run|resume|status|report|demo` | `src/magi_system/cli.py` |
-| Application service, outcome, reports, resume checks | `src/magi_system/service/app.py`, `store.py` |
+| Application service, outcome, reports, resume checks | `src/magi_system/service/app.py`, `store.py` (SQLite / DynamoDB) |
+| AgentCore entrypoint, image, Terraform | `src/magi_system/interfaces/agentcore.py`, `deploy/agentcore/`, `docs/agentcore/` |
 | Graph A–G + triage, subgraphs, reducers | `src/magi_system/engine/` |
 | MAGI decision (verifier + selection) | `src/magi_system/decision/` |
 | Agents, prompts (versioned), LLM adapters | `agents/`, `prompts/`, `llm/` |
-| Workspace / Git, runners, tools, policy, project config | `workspace/`, `execution/`, `tools/`, `policy/`, `config/` |
+| Workspace / Git, runners (container, local, Code Interpreter), tools, policy, project config | `workspace/`, `execution/`, `tools/`, `policy/`, `config/` |
 | Offline scenario + demo target | `src/magi_system/offline.py` |
 | GitHub Action / CI | `action.yml`, `.github/workflows/ci.yml`, `docs/github-actions.md` |
 | Docs | `README.md`, `docs/architecture.md`, `docs/state-and-failures.md`, `docs/security.md`, `docs/providers.md`, `docs/limits.md` |
