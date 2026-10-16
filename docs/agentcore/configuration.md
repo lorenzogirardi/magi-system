@@ -26,6 +26,18 @@ Terraform sets all of these on the runtime (`deploy/agentcore/terraform/agentcor
 | `MAGI_CI_SESSION_TIMEOUT_SECONDS` | Sandbox session timeout (default 8 h) |
 | `MAGI_EVENTS_STDOUT` | `1`: also print redacted events on stdout (CloudWatch) |
 
+## Terraform variables
+
+Set in `deploy/agentcore/terraform/terraform.tfvars` (see `terraform.tfvars.example`).
+`region` and `image_tag` are required. The network ones:
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `vpc_name` | `vpc-lab-ai-001` | Name tag of the dedicated VPC. Subnets are `subnet-<pub\|priv\|iso>-00<n>-<vpc_name>` |
+| `vpc_cidr` | `10.42.0.0/16` | VPC CIDR (must hold six `/24` subnets) |
+| `az_count` | `2` | Availability Zones used |
+| `nat_enabled` | `true` | NAT gateway + Elastic IP (hourly cost). Toggle with `deploy/agentcore/nat.sh` |
+
 Install with `uv sync --extra agentcore`. The extra adds `bedrock-agentcore`, `boto3` and
 `langgraph-checkpoint-aws`. The entrypoint is the `magi-agentcore` console script, which
 listens on port 8080.

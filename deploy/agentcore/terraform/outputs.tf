@@ -22,3 +22,8 @@ output "efs_file_system_id" {
   description = "EFS file system holding run workspaces and artifacts (/magi/<run_id>)."
   value       = aws_efs_file_system.runs.id
 }
+
+output "vpc_id" {
+  description = "Dedicated VPC (used by deploy/agentcore/nat.sh status)."
+  value       = aws_vpc.this.id
+}

@@ -1,8 +1,13 @@
-# AgentCore deploy runbook (not executed yet)
+# AgentCore deploy runbook
 
 [Overview](README.md) · [API](api.md) · [Configuration](configuration.md) · [Security](security.md) · [Limits & costs](limits-and-costs.md) · [Deploy](deploy.md) · [Testing](testing.md)
 
 Requires explicit approval: it creates billable AWS resources.
+
+First deployment (2026-10-16, account 170674040462, `eu-north-1`): done. The runtime role needs
+`elasticfilesystem:DescribeMountTargets` on `*` (AgentCore rejects a policy scoped to the file system
+ARN). If an apply is interrupted while the Runtime is `CREATING`, wait for `READY` and run
+`terraform import aws_bedrockagentcore_agent_runtime.magi <agentRuntimeId>`.
 
 ```bash
 # 0. Build the arm64 image (from the repository root) and run the local smoke test
@@ -10,7 +15,7 @@ deploy/agentcore/smoke.sh
 
 # 1. Create the infrastructure (fill terraform.tfvars from the example first)
 cd deploy/agentcore/terraform
-cp terraform.tfvars.example terraform.tfvars   # region, image_tag
+cp terraform.tfvars.example terraform.tfvars   # region (eu-north-1 answers), image_tag
 terraform init && terraform plan -out tf.plan   # review the plan before applying
 #    The runtime needs the image to exist: first apply only the ECR repository,
 terraform apply -target=aws_ecr_repository.agentcore
@@ -43,6 +48,23 @@ aws bedrock-agentcore invoke-agent-runtime --agent-runtime-arn "$ARN" --runtime-
 jq -r .candidate_patch report.json > candidate.patch
 ```
 
+The VPC is created by this module (default name `vpc-lab-ai-001`, CIDR `10.42.0.0/16`; see
+[Configuration](configuration.md)). It needs Terraform >= 1.9.
+
 `settings.json` is the run settings file as JSON (`provider: openrouter`). Remote targets are
 cloned through the NAT gateway. The deployment has no Git credentials: only public
 repositories work until a credential helper is added (not implemented).
+
+## Stopping the hourly cost
+
+Only the NAT gateway and its Elastic IP are billed by the hour. Between runs:
+
+```bash
+deploy/agentcore/nat.sh stop     # remove them (the runtime loses egress)
+deploy/agentcore/nat.sh start    # recreate them before the next run
+deploy/agentcore/nat.sh status   # list the NAT gateways of the VPC
+```
+
+The script applies only those resources (`terraform apply -target`), asks for Terraform's
+confirmation (`-auto-approve` skips it) and needs `terraform.tfvars`. To remove everything, use
+`terraform destroy`.

@@ -1,8 +1,9 @@
 # Copy to terraform.tfvars (not committed) and fill in. No secrets here: the OpenRouter key
 # is put into Secrets Manager after apply (see docs/agentcore/deploy.md).
-region    = ""          # a Region where AgentCore Runtime + Code Interpreter are available
+region    = ""          # a Region where AgentCore Runtime + Code Interpreter are available (eu-north-1 answers)
 image_tag = ""          # tag pushed to the ECR repository output by this module
 # name                = "magi"
+# vpc_name            = "vpc-lab-ai-001"
 # az_count            = 2
 # max_session_seconds = 28800
 # checkpoint_ttl_days = 30

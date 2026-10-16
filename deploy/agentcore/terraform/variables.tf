@@ -19,10 +19,22 @@ variable "tags" {
   default     = {}
 }
 
+variable "vpc_name" {
+  description = "Name tag of the dedicated VPC; subnets are named subnet-<tier>-00<n>-<vpc_name>."
+  type        = string
+  default     = "vpc-lab-ai-001"
+}
+
 variable "vpc_cidr" {
   description = "CIDR of the dedicated VPC."
   type        = string
   default     = "10.42.0.0/16"
+}
+
+variable "nat_enabled" {
+  description = "Create the NAT gateway and its Elastic IP, the only hourly-billed resources. false: the runtime has no egress (see deploy/agentcore/shutdown.sh)."
+  type        = bool
+  default     = true
 }
 
 variable "az_count" {

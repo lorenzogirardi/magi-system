@@ -136,11 +136,17 @@ Done, all offline (no AWS calls, no real LLM):
 - `deploy/agentcore/Dockerfile`: `python:3.13-slim`, arm64, uid 1000. `deploy/agentcore/smoke.sh`:
   podman build + real HTTP contract, start → HealthyBusy → SUCCESS → Healthy → report. **Passed.**
 - `deploy/agentcore/terraform/`:
-  - VPC (private subnets with NAT for the runtime, isolated subnets for the sandbox)
+  - VPC `vpc-lab-ai-001` (`vpc_name` variable; private subnets with NAT for the runtime, isolated
+    subnets for the sandbox). Target account/Region: 170674040462 / `eu-north-1` (AgentCore APIs answer).
+    `nat_enabled` + `deploy/agentcore/nat.sh stop|start|status` switch off the only hourly cost (NAT + EIP).
+    Installed Terraform is 1.5.7, the module needs >= 1.9: upgrade before validate/plan.
   - EFS, DynamoDB, S3, ECR, Secrets Manager
   - least-privilege IAM, with no Bedrock model access
   - `aws_bedrockagentcore_agent_runtime` + `aws_bedrockagentcore_code_interpreter` (provider aws 6.69.1)
-  - `fmt -check` and `validate` pass. Never planned or applied.
+  - `fmt -check` and `validate` pass. **Deployed 2026-10-16** in `eu-north-1` (VPC, NAT, ECR image
+    `magi-agentcore:1ed5c87`, EFS, DynamoDB, S3, IAM, Code Interpreter, Runtime `READY`; OpenRouter key set).
+    No run started yet: the spike checklist (`docs/agentcore/testing.md`) is next. NAT is billed hourly:
+    stop it with `deploy/agentcore/nat.sh stop` when idle.
 - CI: `uv sync --extra agentcore`; new `terraform` job (fmt/init/validate, no credentials).
 - Tests: **238 passed** (30 new). Lint is clean. `magi demo` reaches SUCCESS.
 

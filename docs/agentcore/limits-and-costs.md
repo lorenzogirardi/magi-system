@@ -20,7 +20,11 @@
 
 ## Costs (orders of magnitude, check current pricing)
 
-- **NAT gateway**: hourly charge plus per-GB processed. This is the main fixed cost.
-- **EFS** (elastic throughput) and **DynamoDB** (on-demand): pay per use; small for a few runs.
+- **NAT gateway** (and its Elastic IP): hourly charge plus per-GB processed. This is the only
+  resource billed by the hour, so the only one worth switching off between runs:
+  `deploy/agentcore/nat.sh stop` / `start` / `status` (Terraform variable `nat_enabled`).
+  While stopped the runtime has no egress (OpenRouter, Git); the isolated sandbox is unaffected.
+  A full teardown is `terraform destroy`.
+- **EFS** (elastic throughput), **Secrets Manager** (per secret per month), **ECR** (storage) and **DynamoDB** (on-demand): pay per use; small for a few runs.
 - **AgentCore Runtime and Code Interpreter**: consumption-based (CPU and memory while active).
 - **OpenRouter**: as today, bounded by `max_cost_usd` in the run settings.

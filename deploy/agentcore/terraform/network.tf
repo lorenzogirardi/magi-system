@@ -10,7 +10,7 @@ resource "aws_vpc" "this" {
   cidr_block           = var.vpc_cidr
   enable_dns_support   = true
   enable_dns_hostnames = true # required to resolve EFS mount target names
-  tags                 = { Name = "${var.name}-vpc" }
+  tags                 = { Name = var.vpc_name }
 }
 
 resource "aws_internet_gateway" "this" {
@@ -22,7 +22,7 @@ resource "aws_subnet" "public" {
   vpc_id            = aws_vpc.this.id
   availability_zone = local.azs[count.index]
   cidr_block        = cidrsubnet(var.vpc_cidr, 8, count.index)
-  tags              = { Name = "${var.name}-public-${count.index}" }
+  tags              = { Name = "subnet-pub-00${count.index + 1}-${var.vpc_name}" }
 }
 
 resource "aws_subnet" "private" {
@@ -30,7 +30,7 @@ resource "aws_subnet" "private" {
   vpc_id            = aws_vpc.this.id
   availability_zone = local.azs[count.index]
   cidr_block        = cidrsubnet(var.vpc_cidr, 8, 10 + count.index)
-  tags              = { Name = "${var.name}-private-${count.index}" }
+  tags              = { Name = "subnet-priv-00${count.index + 1}-${var.vpc_name}" }
 }
 
 resource "aws_subnet" "isolated" {
@@ -38,16 +38,18 @@ resource "aws_subnet" "isolated" {
   vpc_id            = aws_vpc.this.id
   availability_zone = local.azs[count.index]
   cidr_block        = cidrsubnet(var.vpc_cidr, 8, 20 + count.index)
-  tags              = { Name = "${var.name}-isolated-${count.index}" }
+  tags              = { Name = "subnet-iso-00${count.index + 1}-${var.vpc_name}" }
 }
 
 # One managed NAT gateway (single AZ to limit cost; see docs/agentcore/limits-and-costs.md for HA).
 resource "aws_eip" "nat" {
+  count  = var.nat_enabled ? 1 : 0
   domain = "vpc"
 }
 
 resource "aws_nat_gateway" "this" {
-  allocation_id = aws_eip.nat.id
+  count         = var.nat_enabled ? 1 : 0
+  allocation_id = aws_eip.nat[0].id
   subnet_id     = aws_subnet.public[0].id
   depends_on    = [aws_internet_gateway.this]
 }
@@ -62,9 +64,12 @@ resource "aws_route_table" "public" {
 
 resource "aws_route_table" "private" {
   vpc_id = aws_vpc.this.id
-  route {
-    cidr_block     = "0.0.0.0/0"
-    nat_gateway_id = aws_nat_gateway.this.id
+  dynamic "route" {
+    for_each = aws_nat_gateway.this
+    content {
+      cidr_block     = "0.0.0.0/0"
+      nat_gateway_id = route.value.id
+    }
   }
 }
 

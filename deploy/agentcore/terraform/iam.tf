@@ -76,6 +76,13 @@ data "aws_iam_policy_document" "runtime" {
       values   = [aws_efs_access_point.runtime.arn]
     }
   }
+  # AgentCore validates the filesystem mount of the runtime role with this call; the check is
+  # not satisfied by a policy scoped to the file system ARN, so the (read-only) resource is "*".
+  statement {
+    sid       = "DescribeMountTargets"
+    actions   = ["elasticfilesystem:DescribeMountTargets"]
+    resources = ["*"]
+  }
   # Per-run access points for the sandbox: create only with the magi-run tag, delete only tagged ones.
   statement {
     sid       = "CreateRunAccessPoint"
