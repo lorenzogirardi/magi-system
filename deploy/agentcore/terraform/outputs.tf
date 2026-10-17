@@ -27,3 +27,13 @@ output "vpc_id" {
   description = "Dedicated VPC (used by deploy/agentcore/nat.sh status)."
   value       = aws_vpc.this.id
 }
+
+output "dashboard_url" {
+  description = "CloudWatch dashboard with run status, cost, tokens, latency, failures and gate checks."
+  value       = "https://${var.region}.console.aws.amazon.com/cloudwatch/home?region=${var.region}#dashboards:name=${aws_cloudwatch_dashboard.magi.dashboard_name}"
+}
+
+output "code_bucket" {
+  description = "Bucket for the magi-system code bundles; deploy/agentcore/push_code.py publishes here."
+  value       = aws_s3_bucket.code.bucket
+}

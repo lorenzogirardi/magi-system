@@ -1,5 +1,6 @@
 """AgentCore entrypoint dispatch, called directly (no HTTP server, no AWS, scripted model)."""
 
+import json
 import time
 
 import pytest
@@ -63,6 +64,28 @@ def test_start_returns_immediately_then_status_and_report(env):
     assert "farewell()" in rep["candidate_patch"] and rep["patch_truncated"] is False
 
 
+def test_report_offers_the_unverified_candidate_only_when_the_gate_did_not_certify(env):
+    d, _, repo = env
+    d.handle(start_payload(repo, run_id="unv-run"))
+    wait_idle(d)
+    ok = d.handle({"action": "report", "run_id": "unv-run"})
+    assert ok["report"]["unverified_candidate"] is None and ok["unverified_patch"] == ""  # SUCCESS: only the certified patch
+
+    store = d.service.store
+    outcome = {**store.get("unv-run")["outcome"], "status": "FAILED_VERIFICATION", "final_commit": "", "diagnosis": "gate did not pass"}
+    store.update("unv-run", status="FAILED_VERIFICATION", outcome=outcome)
+    rep = d.handle({"action": "report", "run_id": "unv-run"})
+    unverified = rep["report"]["unverified_candidate"]
+    assert unverified["status"] == "FAILED_VERIFICATION" and unverified["commit"] != unverified["base"]
+    assert "farewell()" in rep["unverified_patch"]
+
+    # a checkpoint without the candidate (as after a failed run): the workspace's last commit is used
+    real_values = d.service._values
+    d.service._values = lambda run_id: {k: v for k, v in real_values(run_id).items() if k != "candidate_commit"}
+    again = d.handle({"action": "report", "run_id": "unv-run"})
+    assert again["report"]["unverified_candidate"]["commit"] == unverified["commit"] and "farewell()" in again["unverified_patch"]
+
+
 def test_second_run_in_same_session_is_rejected(env):
     d, _, repo = env
     d.active = "other-run"  # a run is already being driven by this process
@@ -105,6 +128,14 @@ def test_start_failure_is_reported_by_status(env):
     assert d.handle({"action": "status", "run_id": "never"})["error"] == "unknown_run"
 
 
+def test_sandbox_requirements_unsupported_by_the_runner_fail_before_the_run(env):
+    d, _, repo = env
+    d.handle(start_payload(repo, run_id="no-tc", settings={**OFFLINE_SETTINGS, "sandbox": {"requirements": ["requirements.txt"]}}))
+    wait_idle(d)
+    st = d.handle({"action": "status", "run_id": "no-tc"})
+    assert st["status"] == "START_FAILED" and "only by the codeinterpreter runner" in st["error"]
+
+
 def test_make_app_registers_entrypoint(tmp_path):
     app = make_app(lambda: RunService(tmp_path / "runs", models=scripted_models()))
     assert app.handlers["main"] == app.dispatcher.handle
@@ -139,3 +170,19 @@ def test_ping_is_busy_while_a_run_is_active(tmp_path):
     release.set()
     wait_idle(app.dispatcher)
     assert app.get_current_ping_status().value == "Healthy"
+
+
+def test_heartbeat_reports_active_seconds_of_the_run(capsys):
+    import threading
+
+    from magi_system.interfaces.agentcore import heartbeat
+
+    stop = threading.Event()
+    t = threading.Thread(target=heartbeat, args=("hb-run", stop, 0.6))
+    t.start()
+    time.sleep(1.5)
+    stop.set()
+    t.join(3)
+    lines = [json.loads(x) for x in capsys.readouterr().out.splitlines() if x.startswith("{")]
+    assert lines and all(x["kind"] == "heartbeat" and x["run_id"] == "hb-run" for x in lines)
+    assert 1.2 <= sum(x["interval_s"] for x in lines) <= 1.9

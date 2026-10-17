@@ -19,11 +19,22 @@ default_agent:
   timeout_seconds: 300
   routing: {sort: throughput}     # OpenRouter only -> request `provider` field; require_parameters is always added
   # reasoning: {effort: low}      # OpenRouter only -> request `reasoning` field (omit to use the model default)
+  # price:                        # OpenRouter only: compute the cost from this price (USD per million tokens).
+  #                               # Usually leave unset: the list price can be well below what routing really charges.
+  #   input_per_mtok: 0.036       # instead of the provider's figure; used by budget.max_cost_usd
+  #   output_per_mtok: 0.6435
+  #   cached_input_per_mtok: 0.0054
 
 # Per-agent overrides (internal ids). Different models do not remove common-mode errors;
 # tool-based verification does.
 agents: {}
 # Example:
 #   magi.casper: {provider: openrouter, model: deepseek/deepseek-v4-pro}
+
+# AgentCore hosting only: requirements files of the target repo whose wheels are installed for the
+# Code Interpreter sandbox (it has no internet). See docs/agentcore/configuration.md.
+sandbox:
+  requirements: []              # e.g. [requirements.txt]
+  packages: []                  # e.g. [flake8]: tools the repository's gates call but its requirements lack
 
 langfuse: false   # true mirrors redacted events to Langfuse (LANGFUSE_* env vars, `langfuse` extra)

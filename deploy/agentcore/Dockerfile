@@ -1,14 +1,14 @@
-# AgentCore Runtime image for magi-system (microVM compute type: linux/arm64).
+# AgentCore Runtime BASE image for magi-system (microVM compute type: linux/arm64).
+# It holds Python, git, uv and the locked dependencies, but NOT the magi-system code: that is a zip in S3
+# loaded at session start by bootstrap.py (see deploy/agentcore/push_code.py). Rebuild this image only when
+# pyproject.toml / uv.lock (the dependencies) or this file change; a code change needs `push_code.py` only.
 # Build from the repository root:
-#   podman build --platform linux/arm64 -f deploy/agentcore/Dockerfile \
-#     --build-arg MAGI_PLATFORM_REF=$(git rev-parse HEAD) -t magi-agentcore .
+#   docker build --platform linux/arm64 -f deploy/agentcore/Dockerfile -t magi-agentcore .
 # Contains no secrets: the OpenRouter key is read at start from Secrets Manager
 # (MAGI_OPENROUTER_SECRET_ID). See docs/agentcore/.
 FROM docker.io/library/python:3.13-slim
 
-ARG MAGI_PLATFORM_REF=unknown
-ENV MAGI_PLATFORM_REF=${MAGI_PLATFORM_REF} \
-    PYTHONUNBUFFERED=1 \
+ENV PYTHONUNBUFFERED=1 \
     UV_LINK_MODE=copy \
     UV_COMPILE_BYTECODE=1 \
     UV_PROJECT_ENVIRONMENT=/opt/magi/.venv \
@@ -22,10 +22,13 @@ RUN apt-get update \
 COPY --from=ghcr.io/astral-sh/uv:0.11.25 /uv /usr/local/bin/uv
 
 WORKDIR /opt/magi
-COPY pyproject.toml uv.lock README.md ./
-COPY src ./src
-RUN uv sync --frozen --no-dev --extra agentcore \
- && rm /usr/local/bin/uv
+COPY pyproject.toml uv.lock ./
+COPY deploy/agentcore/deps_hash.py deploy/agentcore/bootstrap.py /opt/magi/
+# Dependencies only (--no-install-project). The hash of the pins is what a code bundle must match.
+RUN uv sync --frozen --no-dev --extra agentcore --no-install-project \
+ && uv export --frozen --no-dev --extra agentcore --no-hashes --no-emit-project --no-header -q \
+    | python /opt/magi/deps_hash.py > /opt/magi/deps.sha256
+# uv stays in the image: the runtime installs the target's wheels for the sandbox (sandbox.requirements).
 
 # Non-root; must match the POSIX uid/gid of the EFS access points (MAGI_EFS_POSIX_UID/GID).
 RUN useradd --uid 1000 --create-home magi
@@ -38,4 +41,4 @@ ENV MAGI_STORE=dynamodb \
     MAGI_EVENTS_STDOUT=1
 
 EXPOSE 8080
-ENTRYPOINT ["magi-agentcore"]
+ENTRYPOINT ["python", "/opt/magi/bootstrap.py"]

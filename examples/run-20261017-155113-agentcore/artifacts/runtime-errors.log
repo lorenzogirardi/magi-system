@@ -1,0 +1,24 @@
+1792245072289 exception calling callback for <Future at 0xffff87de99a0 state=finished raised FileNotFoundError>
+1792245072289 Traceback (most recent call last):
+1792245072289 FileNotFoundError: [Errno 2] No such file or directory: '/mnt/runs/run-20261017-154931/events.jsonl'
+1792245072289 Traceback (most recent call last):
+1792245072289 FileNotFoundError: [Errno 2] No such file or directory: '/mnt/runs/run-20261017-154931/events.jsonl'
+1792245072289 Traceback (most recent call last):
+1792245072289 raise RuntimeError('cannot schedule new futures after shutdown')
+1792245072289 RuntimeError: cannot schedule new futures after shutdown
+1792245072314 exception calling callback for <Future at 0xffff87d3a430 state=finished raised FileNotFoundError>
+1792245072314 Traceback (most recent call last):
+1792245072314 FileNotFoundError: [Errno 2] No such file or directory: '/mnt/runs/run-20261017-154931/events.jsonl'
+1792245072314 Traceback (most recent call last):
+1792245072314 FileNotFoundError: [Errno 2] No such file or directory: '/mnt/runs/run-20261017-154931/events.jsonl'
+1792245072314 Traceback (most recent call last):
+1792245072314 raise RuntimeError('cannot schedule new futures after shutdown')
+1792245072314 RuntimeError: cannot schedule new futures after shutdown
+1792245072495 exception calling callback for <Future at 0xffff87de9f40 state=finished raised FileNotFoundError>
+1792245072495 Traceback (most recent call last):
+1792245072495 FileNotFoundError: [Errno 2] No such file or directory: '/mnt/runs/run-20261017-154931/events.jsonl'
+1792245072495 Traceback (most recent call last):
+1792245072495 FileNotFoundError: [Errno 2] No such file or directory: '/mnt/runs/run-20261017-154931/events.jsonl'
+1792245072495 Traceback (most recent call last):
+1792245072495 raise RuntimeError('cannot schedule new futures after shutdown')
+1792245072495 RuntimeError: cannot schedule new futures after shutdown

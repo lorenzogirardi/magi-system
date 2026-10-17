@@ -15,11 +15,13 @@ untrusted input and go through the same path.
 
 from __future__ import annotations
 
+import hashlib
 import os
 import shlex
 import shutil
 import signal
 import subprocess
+import sys
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -27,6 +29,7 @@ from typing import Protocol
 
 from magi_system.observability.redaction import Redactor
 from magi_system.policy.engine import PolicyEngine
+from magi_system.workspace.manager import TOOLCHAIN_DIR
 
 
 @dataclass(frozen=True)
@@ -58,7 +61,13 @@ class ExecutionRunner(Protocol):
 
     def unavailable_hint(self) -> str: ...
 
+    def prepare_toolchain(self, requirements: list[str], packages: list[str] | None = None) -> None: ...
+
     def close(self) -> None: ...
+
+
+class ToolchainError(RuntimeError):
+    """The sandbox toolchain could not be prepared; reported before any agent runs."""
 
 
 def _truncate(text: str, limit: int) -> str:
@@ -111,6 +120,11 @@ class _BaseRunner:
 
     def unavailable_hint(self) -> str:
         return ""
+
+    def prepare_toolchain(self, requirements: list[str], packages: list[str] | None = None) -> None:
+        """Make the target's Python dependencies available to commands (codeinterpreter only)."""
+        if requirements or packages:
+            raise ToolchainError("sandbox.requirements and sandbox.packages are supported only by the codeinterpreter runner")
 
     def close(self) -> None:
         """Release run-scoped resources (sandbox sessions ...). Safe to call more than once."""
@@ -236,6 +250,10 @@ class CodeInterpreterRunner(_BaseRunner):
     MOUNT = "/mnt/ws"
     # InvokeCodeInterpreter is synchronous and capped at 15 minutes; keep a margin.
     MAX_SYNC_SECONDS = 840.0
+    # The sandbox has Python 3.12 (aarch64, no internet, no git, no pytest) under /opt/amazon/...
+    DEFAULT_PATH = "/opt/amazon/genesis1p-tools/venv/bin:/usr/local/bin:/usr/bin:/bin"
+    SANDBOX_PLATFORM, SANDBOX_PYTHON = "aarch64-manylinux_2_28", "3.12"
+    TOOLCHAIN_DIR = TOOLCHAIN_DIR  # inside .git of the run workspace: mounted by the sandbox, invisible to tools and patches
     CONFIG_ENV = {
         "identifier": "MAGI_CI_IDENTIFIER",
         "file_system_id": "MAGI_EFS_FILE_SYSTEM_ID",
@@ -250,7 +268,7 @@ class CodeInterpreterRunner(_BaseRunner):
         self.cfg = {k: env.get(v, "") for k, v in self.CONFIG_ENV.items()}
         self.uid = int(env.get("MAGI_EFS_POSIX_UID", "1000"))
         self.gid = int(env.get("MAGI_EFS_POSIX_GID", "1000"))
-        self.toolchain_path = env.get("MAGI_CI_TOOLCHAIN_PATH", "/usr/local/bin:/usr/bin:/bin")
+        self.toolchain_path = env.get("MAGI_CI_TOOLCHAIN_PATH", self.DEFAULT_PATH)
         self.session_timeout = int(env.get("MAGI_CI_SESSION_TIMEOUT_SECONDS", "28800"))
         self.run_id = self.workspace_root.parent.name
         self._clients = clients
@@ -326,14 +344,63 @@ class CodeInterpreterRunner(_BaseRunner):
         self._session_id = resp["sessionId"]
         return self._session_id
 
+    # -- toolchain ------------------------------------------------------------------------
+
+    @staticmethod
+    def check_requirements(name: str, text: str) -> None:
+        """Requirements come from the target repository (untrusted): plain pinned names only."""
+        for raw in text.splitlines():
+            line = raw.split("#", 1)[0].strip()
+            if line and (line.startswith("-") or "://" in line or "@" in line or line.startswith((".", "/", "~"))):
+                raise ToolchainError(f"{name}: unsupported requirement line {line!r} (only plain package specifiers are installed)")
+
+    def prepare_toolchain(self, requirements: list[str], packages: list[str] | None = None) -> None:
+        """Install the target's wheels (plus `packages`, e.g. a linter) into the run workspace so the
+        sandbox, which has no internet, can import them. Runs here (the runtime has egress), wheels
+        only: nothing executes at install. Idempotent: skipped when nothing changed."""
+        packages = packages or []
+        if not requirements and not packages:
+            return
+        self.check_requirements("sandbox.packages", "\n".join(packages))
+        root = self.workspace_root.resolve()
+        files = []
+        for rel in requirements:
+            f = (root / rel).resolve()
+            if not f.is_relative_to(root) or not f.is_file():
+                raise ToolchainError(f"sandbox.requirements: {rel!r} is not a file inside the repository")
+            self.check_requirements(rel, f.read_text())
+            files.append(f)
+        base = root / self.TOOLCHAIN_DIR
+        site, marker = base / "site", base / "requirements.sha256"
+        digest = hashlib.sha256(b"\0".join([self.SANDBOX_PLATFORM.encode(), self.SANDBOX_PYTHON.encode(),
+                                            *(f.read_bytes() for f in files),
+                                            *(p.encode() for p in packages)])).hexdigest()
+        if marker.is_file() and marker.read_text() == digest and site.is_dir():
+            return
+        shutil.rmtree(base, ignore_errors=True)
+        site.mkdir(parents=True)
+        cmd = ["uv", "pip", "install", "--python", sys.executable, "--target", str(site),
+               "--python-platform", self.SANDBOX_PLATFORM, "--python-version", self.SANDBOX_PYTHON,
+               "--only-binary", ":all:", *[a for f in files for a in ("-r", str(f))], "pytest", *packages]
+        try:
+            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=900,
+                                  env={"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "HOME": os.environ.get("HOME", "/tmp")})
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            raise ToolchainError(f"installing sandbox requirements failed: {type(exc).__name__}: {exc}") from exc
+        if proc.returncode != 0:
+            raise ToolchainError(f"installing sandbox requirements failed (exit {proc.returncode}): "
+                                 f"{(proc.stderr or proc.stdout).strip()[-1500:]}")
+        marker.write_text(digest)
+
     # -- execution ------------------------------------------------------------------------
 
     def remote_command(self, argv: tuple[str, ...], cwd: Path, timeout: float) -> str:
         rel = cwd.resolve().relative_to(self.workspace_root)
         remote_cwd = self.MOUNT if str(rel) == "." else f"{self.MOUNT}/{rel.as_posix()}"
-        env = f"PATH={self.toolchain_path} HOME=/tmp LANG=C.UTF-8 CI=1 MAGI_RUNNER={self.name}"
+        env = (f"PATH={self.toolchain_path} PYTHONPATH={self.MOUNT}/{self.TOOLCHAIN_DIR}/site "
+               f"HOME=/tmp LANG=C.UTF-8 CI=1 MAGI_RUNNER={self.name}")
         return (f"cd {shlex.quote(remote_cwd)} && exec env -i {env} "
-                f"timeout -k 5 {int(timeout)} {shlex.join(argv)}")
+                f"timeout -k 5 {int(timeout)} {shlex.join(argv)} < /dev/null")  # stdin closed: `python -` would wait for the timeout
 
     @staticmethod
     def parse(resp: dict) -> tuple[int | None, str, str]:

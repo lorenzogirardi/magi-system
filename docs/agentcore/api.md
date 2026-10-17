@@ -1,6 +1,6 @@
 # AgentCore request flow and API
 
-[Overview](README.md) · [API](api.md) · [Configuration](configuration.md) · [Security](security.md) · [Limits & costs](limits-and-costs.md) · [Deploy](deploy.md) · [Testing](testing.md)
+[Overview](README.md) · [API](api.md) · [Configuration](configuration.md) · [Security](security.md) · [Limits & costs](limits-and-costs.md) · [Deploy](deploy.md) · [Testing](testing.md) · [Observability](observability.md)
 
 A run takes longer than the 15-minute limit of a synchronous invocation. So `start` and
 `resume` return at once and the run continues in a background thread registered as an
@@ -15,7 +15,7 @@ Use **one session per run**. The `runtimeSessionId` must be at least 33 characte
 | `start` | `repo`, `ref`, `request` (Markdown text), `profile` (default `agentcore`), optional `settings` (run settings object, same schema as `--config`), `project`, `run_id` | `{"run_id", "accepted": true}` |
 | `resume` | `run_id` | `{"run_id", "accepted": true}` |
 | `status` | `run_id` | `RunService.status`, plus `active_in_session`. Before the run record exists: `STARTING`. If it was rejected before starting: `START_FAILED` with `error`. |
-| `report` | `run_id` | `{"report", "candidate_patch", "patch_truncated"}` (patch inline up to 5 MB) |
+| `report` | `run_id` | `{"report", "candidate_patch", "unverified_patch", "patch_truncated"}`. `candidate_patch` is the certified patch (only on SUCCESS). `unverified_patch` is the developers' last commit when the run did not end in SUCCESS (`report.unverified_candidate` gives commit, base, status, diagnosis): **not certified**, nothing is published for it, it exists so the work can be tried. Patches inline up to 5 MB |
 
 Any other payload returns `{"error": "invalid_request"}`. A rejected request (profile or
 provider not allowed, a run already active, a resume refused) returns

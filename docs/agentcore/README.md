@@ -1,6 +1,6 @@
 # Hosting on Amazon Bedrock AgentCore (managed services only)
 
-[Overview](README.md) · [API](api.md) · [Configuration](configuration.md) · [Security](security.md) · [Limits & costs](limits-and-costs.md) · [Deploy](deploy.md) · [Testing](testing.md)
+[Overview](README.md) · [API](api.md) · [Configuration](configuration.md) · [Security](security.md) · [Limits & costs](limits-and-costs.md) · [Deploy](deploy.md) · [Testing](testing.md) · [Observability](observability.md)
 
 magi-system can run as a hosted service on AWS using **managed services only, without EC2**.
 AgentCore only hosts the process; **models are always called through OpenRouter, never
@@ -62,7 +62,7 @@ flowchart LR
 | OpenRouter API key | **Secrets Manager** |
 | Image | **ECR** (immutable tags, scan on push) |
 | Egress to OpenRouter and the Git host | **NAT gateway**, plus gateway endpoints for DynamoDB and S3 |
-| Logs | CloudWatch (redacted events on stdout) and AgentCore Observability |
+| Logs and dashboard | CloudWatch: redacted events on stdout, metrics and a dashboard ([Observability](observability.md)) |
 
 The AgentCore "Instances" compute type (EC2 in your account) is deliberately not used.
 

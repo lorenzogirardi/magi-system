@@ -35,7 +35,7 @@ from magi_system.engine.helpers import (
     verify_claims,
 )
 from magi_system.engine.schemas import CandidateReviewDraft, DocsDraft
-from magi_system.models.common import MAGI_IDS, AgentId, Phase, Verdict
+from magi_system.models.common import MAGI_IDS, AgentId, Phase, Verdict, stable_id
 from magi_system.models.decision import AgentFailure, Finding, FindingCategory, FindingStatus, Severity
 from magi_system.models.work import DocKind, DocumentationResult, DocUpdate
 
@@ -72,14 +72,47 @@ def verify_checks(state: dict, ctx: RunContext) -> dict:
     scenarios = list((state.get("acceptance_scenarios") or {}).values())
     latest = max((s["round"] for s in scenarios), default=0)
     for sc in sorted((s for s in scenarios if s["round"] == latest), key=lambda s: s["id"]):
-        if not sc["command"] or sc["denied"]:
+        if not sc["command"] or sc["denied"] or sc.get("superseded"):
             continue
-        results.append(run_command_check(ctx, f"qa.scenario:{sc['name']}", sc["command"], commit, round=rnd, phase=Phase.SPECIALIST_VERIFICATION))
+        results.append(run_command_check(ctx, f"qa.scenario:{sc['name']}", sc["command"], commit, round=rnd,
+                                          phase=Phase.SPECIALIST_VERIFICATION, scenario=True))
     results.append(integrity_check(ctx, state, commit, round=rnd, phase=Phase.SPECIALIST_VERIFICATION))
     results.append(scope_check(ctx, state, commit, round=rnd, phase=Phase.SPECIALIST_VERIFICATION))
     # Executing commands must not alter the candidate.
     revert_out_of_scope(ctx, commit, ())
     return {"gate_results": {f"{r.subject_id}@{commit}": r.model_dump(mode="json") for r in results}}
+
+
+def acceptance_verdict(scenario_checks: dict[str, str], blocking_titles: list[str]) -> tuple[Verdict, str]:
+    """QA acceptance: at least one scenario PASSes, none FAILs. NOT_APPLICABLE scenarios (advisory, see
+    gates.scenario_verdict) are reported but never decide."""
+    passed = [k for k, v in scenario_checks.items() if v == Verdict.PASS.value]
+    advisory = [k for k, v in scenario_checks.items() if v == Verdict.NOT_APPLICABLE.value]
+    note = f"; advisory (not counted): {advisory}" if advisory else ""
+    if not passed:
+        return Verdict.UNKNOWN, f"no acceptance scenario demonstrated the change{note}"
+    failed = {k: v for k, v in scenario_checks.items() if v not in (Verdict.PASS.value, Verdict.NOT_APPLICABLE.value)}
+    if failed:
+        return Verdict.FAIL, f"acceptance scenarios not passing: {failed}{note}"
+    if blocking_titles:
+        return Verdict.FAIL, f"confirmed QA findings: {blocking_titles}"
+    return Verdict.PASS, f"{len(passed)} acceptance scenario(s) passed; QA review without confirmed blockers{note}"
+
+
+def pick_scenario_rewrites(scenarios: dict, executed: dict[str, str], rewrites, command_allowed) -> list[tuple[dict, object]]:
+    """Which QA rewrites are accepted: a scenario that FAILED when executed, at most once per scenario, with a
+    different command the command policy allows. The corrected command is then EXECUTED: the verdict stays
+    that of an execution, never the QA's opinion."""
+    live = [s for s in scenarios.values() if not s.get("superseded")]
+    already = {s["name"] for s in scenarios.values() if s.get("amended_from")}
+    picked = []
+    for new in rewrites:
+        old = next((s for s in live if s["name"] == new.id and not s.get("amended_from")), None)
+        if (old is None or new.id in already or not new.command or new.command == old["command"]
+                or executed.get(f"qa.scenario:{new.id}") != Verdict.FAIL.value or not command_allowed(new.command)):
+            continue
+        picked.append((old, new))
+    return picked
 
 
 def route_to_specialists(state: dict):
@@ -141,6 +174,21 @@ def specialist_collect(state: dict, ctx: RunContext) -> dict:
     settled = {f.id: f for f in settle_findings(findings, status, ctx.events)}
     out_gates = {}
     executed = {r["check"]: r["verdict"] for r in _checks_for(state, commit)}
+    amended_checks: dict = {}
+    scenario_updates: dict = {}
+    qa = gates.get(_review_gate(AgentId.QA))
+    if isinstance(qa, dict):  # the QA saw the executed checks: it may correct a scenario that is wrong, not the code
+        for old, new in pick_scenario_rewrites(state.get("acceptance_scenarios") or {}, executed, qa["draft"].acceptance_scenarios,
+                                               lambda c: ctx.policy.check_command(c).allowed):
+            sid = stable_id("acc", old["round"], new.id, new.command)
+            scenario_updates[old["id"]] = {**old, "superseded": True}
+            scenario_updates[sid] = {**old, "id": sid, "description": new.description, "command": new.command, "denied": False,
+                                     "denial_reason": "", "amended_from": old["id"], "superseded": False}
+            ctx.events.emit("scenario_amended", scenario=new.id, old_command=old["command"], new_command=new.command, reason=new.description[:500])
+            result = run_command_check(ctx, f"qa.scenario:{new.id}", new.command, commit, round=rnd,
+                                       phase=Phase.SPECIALIST_VERIFICATION, salt="amended", scenario=True)
+            executed[result.subject_id] = result.verdict.value
+            amended_checks[f"{result.subject_id}@{commit}"] = result.model_dump(mode="json")
     for gate, g in gates.items():
         if not isinstance(g, dict):
             out_gates[gate] = g
@@ -150,14 +198,9 @@ def specialist_collect(state: dict, ctx: RunContext) -> dict:
         blocking = [f for f in mine if f.status is FindingStatus.CONFIRMED and f.severity in (Severity.MAJOR, Severity.BLOCKER)]
         if agent is AgentId.QA:
             scenario_checks = {k: v for k, v in executed.items() if k.startswith("qa.scenario:")}
-            if not scenario_checks:
-                verdict, detail = Verdict.UNKNOWN, "no executable acceptance scenario: acceptance not demonstrated"
-            elif any(v != Verdict.PASS.value for v in scenario_checks.values()):
-                verdict, detail = Verdict.FAIL, f"acceptance scenarios not passing: {scenario_checks}"
-            elif blocking:
-                verdict, detail = Verdict.FAIL, f"confirmed QA findings: {[f.title for f in blocking]}"
-            else:
-                verdict, detail = Verdict.PASS, f"{len(scenario_checks)} acceptance scenario(s) passed; QA review without confirmed blockers"
+            verdict, detail = acceptance_verdict(scenario_checks, [f.title for f in blocking])
+            if scenario_updates:
+                detail += f"; scenarios corrected by QA and re-executed: {sorted(s['name'] for s in scenario_updates.values() if s.get('amended_from'))}"
         elif agent is AgentId.SRE and draft.not_applicable_reason and not mine:
             if ctx.policy.not_applicable_allowed(gate):
                 verdict, detail = Verdict.NOT_APPLICABLE, f"not applicable: {draft.not_applicable_reason}"
@@ -172,7 +215,8 @@ def specialist_collect(state: dict, ctx: RunContext) -> dict:
         "findings": {fid: f.model_dump(mode="json") for fid, f in settled.items()},
         "claims": {cid: c.model_dump(mode="json") for cid, c in verified.items()},
         "verification_results": dump(results.values()),
-        "gate_results": {f"{gate}@{commit}": r.model_dump(mode="json") for gate, r in out_gates.items()},
+        "gate_results": {**amended_checks, **{f"{gate}@{commit}": r.model_dump(mode="json") for gate, r in out_gates.items()}},
+        "acceptance_scenarios": scenario_updates,
         "specialist_results": {f"{a.value}@{commit}": {"agent": a.value, "commit": commit, "ok": a in ok} for a in SPECIALISTS},
     }
 

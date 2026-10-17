@@ -81,6 +81,14 @@ class RunBudget(StrictModel):
     max_cost_usd: float | None = Field(default=None, gt=0)  # enforced only when reported
 
 
+class ModelPrice(StrictModel):
+    """USD per million tokens. When set, the run cost is computed from it instead of the provider's figure."""
+
+    input_per_mtok: float = Field(ge=0)
+    output_per_mtok: float = Field(ge=0)
+    cached_input_per_mtok: float | None = Field(default=None, ge=0)  # prompt tokens served from cache; default: input price
+
+
 class AgentModelConfig(StrictModel):
     """Per-agent provider settings. No secrets: keys come from environment at runtime."""
 
@@ -93,6 +101,7 @@ class AgentModelConfig(StrictModel):
     # {"sort": "throughput"}), `reasoning` -> `reasoning` (e.g. {"effort": "low"}).
     routing: dict[str, Any] | None = None
     reasoning: dict[str, Any] | None = None
+    price: ModelPrice | None = None  # OpenRouter only; see ModelPrice
 
 
 class RunInput(StrictModel):

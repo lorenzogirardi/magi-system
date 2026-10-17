@@ -1,0 +1,22 @@
+== clone https://github.com/lorenzogirardi/fastapi-agentcore.git @ d6151214c22ebe87c12901fa3c523b7fc08f7938
+ app/toolbox/__init__.py             |  36 +++
+ app/toolbox/base.py                 | 104 ++++++
+ app/toolbox/registry.py             |  35 ++
+ app/toolbox/tools/__init__.py       |   1 +
+ app/toolbox/tools/json_validate.py  |  85 +++++
+ app/toolbox/tools/k8s_manifest.py   | 617 ++++++++++++++++++++++++++++++++++++
+ app/toolbox/tools/text_diff.py      |  93 ++++++
+ docs/14-dev-sre-toolbox.md          | 302 ++++++++++++++++++
+ docs/README.md                      |   1 +
+ requirements.txt                    |   3 +
+ tests/test_toolbox_api.py           | 169 ++++++++++
+ tests/test_toolbox_json_validate.py |  68 ++++
+ tests/test_toolbox_k8s.py           | 323 +++++++++++++++++++
+ tests/test_toolbox_text_diff.py     |  61 ++++
+ 21 files changed, 2329 insertions(+), 49 deletions(-)
+== tests: python -m pytest -q
+sssssssssssssssssssssssss............................................... [ 45%]
+........................................................................ [ 91%]
+..............                                                           [100%]
+133 passed, 25 skipped in 1.84s
+docker is not running

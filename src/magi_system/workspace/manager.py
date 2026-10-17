@@ -25,6 +25,9 @@ from magi_system.models.knowledge import FileEntry
 from magi_system.models.run import LocatorKind, RepoLocator, locator_has_credentials, redact_locator
 from magi_system.workspace.git import GitError, git
 
+# Sandbox dependencies live inside .git: the sandbox mounts the workspace, and nothing there is scanned by
+# linters, pytest or grep, tracked, cleaned by `git clean` or part of a patch.
+TOOLCHAIN_DIR = ".git/magi-toolchain"
 STEP_TRAILER = "Magi-Step"
 AGENT_TRAILER = "Magi-Agent"
 RUN_TRAILER = "Magi-Run"

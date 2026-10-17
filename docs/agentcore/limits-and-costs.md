@@ -1,12 +1,13 @@
 # AgentCore limits and costs
 
-[Overview](README.md) · [API](api.md) · [Configuration](configuration.md) · [Security](security.md) · [Limits & costs](limits-and-costs.md) · [Deploy](deploy.md) · [Testing](testing.md)
+[Overview](README.md) · [API](api.md) · [Configuration](configuration.md) · [Security](security.md) · [Limits & costs](limits-and-costs.md) · [Deploy](deploy.md) · [Testing](testing.md) · [Observability](observability.md)
 
 ## Limits
 
 - One sandbox command can run for at most **840 s**: a synchronous invocation is capped at
   15 minutes and the runner keeps a margin. A longer command timeout is capped.
-- Code Interpreter has **no custom images**. The target's toolchain (`make`, pytest, project
+- Code Interpreter has **no custom images**. Python dependencies are installed as wheels into the
+  run workspace (`sandbox.requirements`, see [Configuration](configuration.md)). The target's toolchain (`make`, pytest, project
   dependencies) must be available in the sandbox: preinstalled tools, or installed on EFS and
   exposed with `MAGI_CI_TOOLCHAIN_PATH`. Confirming this is spike item 1. If it does not work,
   the managed fallback is **AWS CodeBuild** (custom images, EFS mount, no EC2) for gate

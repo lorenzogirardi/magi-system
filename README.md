@@ -30,6 +30,9 @@ Every run ends in one of two ways:
 
 It never pushes, merges or deploys. Those stay a separate, human-authorized step.
 
+See it on a real target: [case study of the first SUCCESS](examples/run-20261015-205501-e0a70f/article.md)
+(a Dev/SRE Toolbox added to a FastAPI app, 10/10 gates, $1.05, 19 minutes).
+
 ## Why three architects
 
 Everything downstream starts from the architecture. Developers implement the plan, QA tests

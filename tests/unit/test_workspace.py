@@ -85,6 +85,19 @@ def test_restore_discards_partial_writes(workspaces, target_repo):
     assert "greet()" in (ws / "src/greet.sh").read_text()
 
 
+def test_restore_keeps_the_sandbox_toolchain(workspaces, target_repo):
+    m = workspaces.prepare("run-t", str(target_repo), "main")
+    ws = workspaces.workspace_path("run-t")
+    (ws / ".git" / "magi-toolchain" / "site").mkdir(parents=True)  # where CodeInterpreterRunner.prepare_toolchain installs
+    (ws / ".git" / "magi-toolchain" / "site" / "dep.py").write_text("x = 1\n")
+    (ws / "partial.txt").write_text("x")
+    workspaces.restore("run-t", m.baseline_commit)
+    assert (ws / ".git" / "magi-toolchain" / "site" / "dep.py").exists()
+    status = __import__("subprocess").run(["git", "status", "--porcelain", "--ignored"], cwd=ws, capture_output=True, text=True).stdout
+    assert "magi-toolchain" not in status  # not untracked, not ignored: it never shows up in the tree or a patch
+    assert not (ws / "partial.txt").exists()
+
+
 def test_two_runs_two_projects_isolated(workspaces, tmp_path):
     a = make_repo(tmp_path / "proj-a", {"a.txt": "A\n"})
     b = make_repo(tmp_path / "proj-b", {"b.txt": "B\n"})

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import concurrent.futures
 import json
+import time
 from collections.abc import Callable
 from dataclasses import dataclass, replace
 from typing import Any
@@ -65,6 +66,7 @@ class AgentCaller:
     def _complete(self, agent: AgentId, request: ModelRequest) -> ModelResponse:
         self.budget.before_llm_call()
         timeout = self.timeouts.get(agent, 120.0)
+        started = time.monotonic()
         pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
         future = pool.submit(self._model(agent).complete, request, timeout=timeout)
         try:
@@ -77,6 +79,7 @@ class AgentCaller:
         self.events.emit(
             "llm_call", agent=agent.value, purpose=request.purpose, round=request.round,
             prompt=request.prompt_version, input_tokens=response.input_tokens, output_tokens=response.output_tokens,
+            cost_usd=response.cost_usd, provider_cost_usd=response.provider_cost_usd, latency_ms=round((time.monotonic() - started) * 1000),
         )
         return response
 

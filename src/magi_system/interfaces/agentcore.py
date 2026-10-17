@@ -16,6 +16,7 @@ Configuration comes only from environment variables:
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import threading
@@ -93,6 +94,24 @@ def _check_providers(settings: RunSettings) -> None:
         raise RunInputError(f"model provider(s) {sorted(used - allowed)} not allowed here (allowed: {sorted(allowed)})")
 
 
+def heartbeat(run_id: str, stop: threading.Event, interval: float = 60.0) -> None:
+    """Print one JSON line per `interval` seconds while a run is active, then one for the remainder.
+
+    The dashboard sums `interval_s` to get the active time of a run (infrastructure cost estimate)."""
+    last = time.monotonic()
+
+    def beat() -> None:
+        nonlocal last
+        now = time.monotonic()
+        if now - last >= 0.5:
+            print(json.dumps({"kind": "heartbeat", "run_id": run_id, "interval_s": round(now - last, 1)}), flush=True)
+        last = now
+
+    while not stop.wait(interval):
+        beat()
+    beat()
+
+
 class Dispatcher:
     """Request handling and the one-active-run-per-process rule (one session = one run)."""
 
@@ -103,6 +122,7 @@ class Dispatcher:
         self._lock = threading.Lock()
         self.active: str | None = None
         self.start_failures: dict[str, str] = {}
+        self.heartbeat_seconds = 60.0
 
     @property
     def service(self) -> RunService:
@@ -143,6 +163,9 @@ class Dispatcher:
             self.active = run_id
         task = self._tasks.add_async_task("magi-run", {"run_id": run_id})
 
+        stop_beat = threading.Event()
+        threading.Thread(target=heartbeat, args=(run_id, stop_beat, self.heartbeat_seconds), name=f"beat-{run_id}", daemon=True).start()
+
         def body() -> None:
             try:
                 work()
@@ -152,6 +175,7 @@ class Dispatcher:
                 self.start_failures[run_id] = f"{type(exc).__name__}: {exc}"
                 traceback.print_exc()
             finally:
+                stop_beat.set()
                 with self._lock:
                     self.active = None
                 self._tasks.complete_async_task(task)
@@ -177,7 +201,16 @@ class Dispatcher:
             return {"error": "unknown_run", "run_id": run_id}
         patch = self.service.workspaces.artifacts_path(run_id) / "candidate.patch"
         text = patch.read_text() if patch.is_file() and patch.stat().st_size <= MAX_PATCH_BYTES else ""
-        return {"report": rep, "candidate_patch": text,
+        unverified = rep.get("unverified_candidate")
+        unverified_patch = ""
+        if unverified:  # work the gate did not certify; read from the workspace, never published
+            try:
+                unverified_patch = self.service.workspaces.diff(run_id, unverified["base"], unverified["commit"])
+            except Exception:  # noqa: BLE001 - a missing workspace must not break the report
+                unverified_patch = ""
+            if len(unverified_patch.encode()) > MAX_PATCH_BYTES:
+                unverified_patch = ""
+        return {"report": rep, "candidate_patch": text, "unverified_patch": unverified_patch,
                 "patch_truncated": patch.is_file() and patch.stat().st_size > MAX_PATCH_BYTES}
 
 

@@ -75,5 +75,17 @@ variable "run_settings_file" {
 variable "ci_toolchain_path" {
   description = "PATH for target commands inside the Code Interpreter (e.g. a toolchain installed on EFS under the run mount)."
   type        = string
-  default     = "/usr/local/bin:/usr/bin:/bin"
+  default     = "/opt/amazon/genesis1p-tools/venv/bin:/usr/local/bin:/usr/bin:/bin"
+}
+
+variable "dashboard_cost_cap_usd" {
+  description = "Horizontal line on the dashboard's cost graph (set it to the run's max_cost_usd)."
+  type        = number
+  default     = 3
+}
+
+variable "infra_usd_per_hour" {
+  description = "Estimated infrastructure cost of one active run hour, shown on the dashboard. Default 0.27 = NAT gateway + public IPv4 (0.046 + 0.005) + Runtime and Code Interpreter at 1 vCPU / 2 GB each (2 x (0.0895 + 2 x 0.00945)), eu-north-1 list prices. EFS, DynamoDB, S3 and CloudWatch are excluded."
+  type        = number
+  default     = 0.27
 }

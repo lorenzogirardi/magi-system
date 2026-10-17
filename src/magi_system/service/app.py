@@ -27,7 +27,7 @@ from magi_system.engine.budget import BudgetTracker
 from magi_system.engine.context import RunContext, control_fingerprint
 from magi_system.engine.graph import build_graph
 from magi_system.engine.state import INITIAL_KEYS
-from magi_system.execution.runner import make_runner
+from magi_system.execution.runner import ToolchainError, make_runner
 from magi_system.llm.base import ModelAdapter
 from magi_system.llm.providers import make_adapter
 from magi_system.models.common import AgentId, content_hash
@@ -45,7 +45,7 @@ from magi_system.models.run import (
 from magi_system.observability.events import EventLog, LangfuseTracer
 from magi_system.policy.engine import PolicyEngine, PolicyError
 from magi_system.service.store import open_store
-from magi_system.workspace.git import git
+from magi_system.workspace.git import GitError, git
 from magi_system.workspace.manager import WorkspaceError, WorkspaceManager, control_repo_root
 
 RECURSION_LIMIT = 400
@@ -60,6 +60,16 @@ class ResumeError(Exception):
     """The run cannot be resumed safely (changed prompts/policy, missing workspace ...)."""
 
 
+class SandboxSettings(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    # requirements files of the target (paths relative to the repository) installed as wheels for
+    # the Code Interpreter sandbox, which has no internet. Empty: nothing is installed.
+    requirements: list[str] = []
+    # extra packages installed the same way, e.g. a linter the repository's gates call but does not list
+    packages: list[str] = []
+
+
 class RunSettings(BaseModel):
     """Optional external settings file (`--config`). No secrets: keys come from env vars."""
 
@@ -69,6 +79,7 @@ class RunSettings(BaseModel):
     agents: dict[str, AgentModelConfig] = {}
     default_agent: AgentModelConfig = AgentModelConfig()
     langfuse: bool = False
+    sandbox: SandboxSettings = SandboxSettings()
 
     @classmethod
     def load(cls, path: Path | None) -> RunSettings:
@@ -135,7 +146,7 @@ class RunService:
         for agent in AGENT_IDS:
             cfg = settings.agent(agent)
             out[agent] = make_adapter(cfg.provider, cfg.model, temperature=cfg.temperature, max_output_tokens=cfg.max_output_tokens,
-                                      routing=cfg.routing, reasoning=cfg.reasoning)
+                                      routing=cfg.routing, reasoning=cfg.reasoning, price=cfg.price)
         return out
 
     def _context(self, run_id: str, run_input: RunInput, settings: RunSettings, project: ResolvedProjectConfig,
@@ -227,6 +238,12 @@ class RunService:
             ctx.runner.close()
             self.workspaces.cleanup(run_id, keep_artifacts=False)
             raise RunInputError(hint)
+        try:
+            ctx.runner.prepare_toolchain(settings.sandbox.requirements, settings.sandbox.packages)
+        except ToolchainError as exc:
+            ctx.runner.close()
+            self.workspaces.cleanup(run_id, keep_artifacts=False)
+            raise RunInputError(str(exc)) from exc
         self.store.create(run_id, record)
         record_env = {"environment_id": ctx.runner.environment_id()}
         self.store.update(run_id, **record_env)
@@ -398,6 +415,7 @@ class RunService:
         outcome = record.get("outcome") or {}
         return {
             "outcome": outcome,
+            "unverified_candidate": self._unverified_candidate(run_id, record, values, outcome),
             "change_levels": {
                 "verified": outcome.get("change_level") == ChangeLevel.VERIFIED.value,
                 "integrated": False,  # merge is not implemented and never performed by the platform
@@ -415,6 +433,23 @@ class RunService:
             "notice": "Offline/scripted model runs demonstrate orchestration only, not model quality."
             if any(c.get("provider") == "fake" for c in (record.get("run_input") or {}).get("agents", {}).values()) else "",
         }
+
+    def _unverified_candidate(self, run_id: str, record: dict, values: dict, outcome: dict) -> dict | None:
+        """The developers' last commit when the run did not end in SUCCESS, so the work can be tried.
+
+        It is NOT certified: the gate did not pass (or could not run). Nothing is published for it."""
+        if outcome.get("final_commit"):
+            return None
+        base = values.get("baseline_commit") or record["target"]["baseline_commit"]
+        try:
+            # The checkpoint of a run that did not finish well may not carry the candidate: the last commit in the
+            # workspace is the developers' latest work.
+            head = values.get("candidate_commit") or self.workspaces.head(run_id)
+            if head and head != base and self.workspaces.commit_exists(run_id, head):
+                return {"commit": head, "base": base, "status": outcome.get("status"), "diagnosis": outcome.get("diagnosis", "")}
+        except (WorkspaceError, GitError, OSError):
+            pass  # workspace pruned or unreadable: nothing to offer
+        return None
 
     def _write_report(self, run_id: str) -> None:
         rep = self.report(run_id)

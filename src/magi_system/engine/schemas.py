@@ -6,9 +6,10 @@ IDs, verification status). Agents never set statuses, verdicts or IDs themselves
 
 from __future__ import annotations
 
+import re
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, create_model
+from pydantic import BaseModel, ConfigDict, Field, create_model, model_validator
 
 from magi_system.models.knowledge import ClaimKind
 
@@ -24,6 +25,28 @@ class ClaimDraft(Draft):
     pattern: str = ""
     expect: bool = True
     critical: bool = False
+
+    @model_validator(mode="before")
+    @classmethod
+    def _repair_bare_symbol_path(cls, data: Any) -> Any:
+        # Models write the symbol in `pattern` ("def verify_credentials") and only the path in `target`. The information is
+        # there, so complete the target instead of discarding a true claim.
+        if isinstance(data, dict) and data.get("kind") == ClaimKind.SYMBOL_EXISTS.value and "::" not in str(data.get("target", "")):
+            m = re.match(r"\s*(?:async\s+def|def|class)\s+(\w+)", str(data.get("pattern", "")))
+            if m:
+                return {**data, "target": f"{data['target']}::{m.group(1)}"}
+        return data
+
+    @model_validator(mode="after")
+    def _target_matches_the_kind(self) -> ClaimDraft:
+        # A claim in the wrong format says nothing about the code, and the verifier would call it "refuted". Failing
+        # here reports the mistake to the agent, which retries (AgentCaller.ask feeds this message back).
+        if self.kind is ClaimKind.SYMBOL_EXISTS and "::" not in self.target:
+            raise ValueError(f"symbol claim target {self.target!r} must be 'path::symbol' (or '*::symbol'), not a bare path")
+        if self.kind is ClaimKind.POLICY_EXISTS and any(ch.isspace() for ch in self.target):
+            raise ValueError(f"policy claim target {self.target!r} must be one dotted key of the platform policy "
+                             "(for example 'limits.max_tool_calls'), without spaces")
+        return self
 
 
 class AssumptionDraft(Draft):
@@ -142,6 +165,8 @@ class PairAssessmentDraft(Draft):
 
 class CandidateReviewDraft(Draft):
     findings: list[FindingDraft] = Field(default_factory=list)
+    acceptance_scenarios: list[AcceptanceScenarioDraft] = Field(
+        default_factory=list, description="QA only: a corrected version of a scenario that FAILED, with the same id")
     not_applicable_reason: str = ""
     summary: str = ""
 

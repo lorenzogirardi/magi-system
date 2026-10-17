@@ -3,6 +3,8 @@ write-scope checks, and scope-safe commits. All results are bound to one commit.
 
 from __future__ import annotations
 
+import re
+
 from magi_system.engine.context import RunContext
 from magi_system.engine.helpers import meta
 from magi_system.models.common import AgentId, Phase, Verdict
@@ -22,7 +24,37 @@ def gate_result(gate: str, commit: str, verdict: Verdict, detail: str, *, round:
     )
 
 
-def run_command_check(ctx: RunContext, gate: str, command: str, commit: str, *, round: int, phase: Phase, salt: str = "") -> VerificationResult:
+_TEXT_SEARCH_CMD = re.compile(r"(^|[;&|(]\s*)(grep|egrep|fgrep|rg|ack)\b")
+_FILE_WALK = re.compile(r"\b(rglob|glob|walk|iterdir)\(")
+_FILE_READ = re.compile(r"\bread_text\(|\.read\(\)|\bopen\(")
+
+
+def is_source_text_scan(command: str) -> bool:
+    """True when the command searches the TEXT of source files (grep, or files read through a glob).
+
+    Such a check also matches comments, docstrings, field names and messages, so a hit proves nothing about
+    behaviour: the docstring "no eval/exec" fails a search for `exec`, and a Kubernetes `requests` field fails a
+    search for the network library. An AST-based check reads text too but understands code, so it is not one."""
+    if re.search(r"\bast\.|\bimport ast\b", command):
+        return False
+    return bool(_TEXT_SEARCH_CMD.search(command) or (_FILE_WALK.search(command) and _FILE_READ.search(command)))
+
+
+def scenario_verdict(command: str, verdict: Verdict, exit_code: int | None, stdout: str) -> tuple[Verdict, str]:
+    """Acceptance scenarios are written by a model before the code exists; a failure that does not come from running
+    the code must not decide the run. Returns the verdict to record and a note ("" = unchanged)."""
+    if verdict is not Verdict.FAIL:
+        return verdict, ""
+    if exit_code == 5 and "pytest" in command:
+        return Verdict.NOT_APPLICABLE, "advisory: pytest selected no tests (exit code 5), so the scenario verified nothing"
+    if is_source_text_scan(command):
+        return Verdict.NOT_APPLICABLE, ("advisory: the scenario searches source TEXT (also comments and names), not behaviour; "
+                                        f"it matched: {stdout.strip()[-400:] or '(no output)'}")
+    return verdict, ""
+
+
+def run_command_check(ctx: RunContext, gate: str, command: str, commit: str, *, round: int, phase: Phase, salt: str = "",
+                      scenario: bool = False) -> VerificationResult:
     ctx.budget.on_tool_call("run_command")
     r = ctx.runner.run(command, cwd=ctx.workspace)
     if r.denied:
@@ -34,9 +66,27 @@ def run_command_check(ctx: RunContext, gate: str, command: str, commit: str, *, 
     else:
         verdict = Verdict.PASS if r.exit_code == 0 else Verdict.FAIL
         detail = f"exit {r.exit_code}\n--- stdout ---\n{r.stdout[-3000:]}\n--- stderr ---\n{r.stderr[-1500:]}"
+        if scenario:
+            verdict, note = scenario_verdict(command, verdict, r.exit_code, r.stdout)
+            if note:
+                detail = f"{note}\n{detail}"
+                ctx.events.emit("scenario_advisory", gate=gate, commit=commit, command=command, exit_code=r.exit_code, note=note[:500])
     ctx.events.emit("check", gate=gate, commit=commit, verdict=verdict.value, command=command, exit_code=r.exit_code,
                     runner=r.runner, environment=r.environment_id)
     return gate_result(gate, commit, verdict, detail, round=round, phase=phase, command=command, exit_code=r.exit_code, salt=salt)
+
+
+def project_gate_problems(ctx: RunContext) -> list[str]:
+    """Mandatory project gates that cannot run (no command, denied, no allowed N/A): known before any LLM call."""
+    cfg, problems = ctx.project.config, []
+    for gate, key in PROJECT_GATES.items():
+        if gate not in ctx.policy.mandatory_gates:
+            continue
+        if key in ctx.project.denied_commands:
+            problems.append(f"{gate}: command not authorized ({ctx.project.denied_commands[key]})")
+        elif key not in cfg.commands and not (cfg.not_applicable.get(gate) and ctx.policy.not_applicable_allowed(gate)):
+            problems.append(f"{gate}: no '{key}' command discovered; add commands.{key} (or not_applicable.{gate} with a reason) to .magi/config.yaml")
+    return problems
 
 
 def project_gate(ctx: RunContext, gate: str, commit: str, *, round: int, phase: Phase, salt: str = "") -> VerificationResult:

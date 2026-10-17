@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from magi_system.engine.context import RunContext, node
+from magi_system.engine.gates import project_gate_problems
 from magi_system.engine.helpers import dump, meta
 from magi_system.models.common import AgentId, Phase
 from magi_system.models.knowledge import Evidence, EvidenceKind, RepositorySnapshot
@@ -13,6 +14,11 @@ MANIFESTS = ("Makefile", "package.json", "pyproject.toml", "setup.py", "go.mod",
 @node("intake")
 def intake(state: dict, ctx: RunContext) -> dict:
     commit = state["baseline_commit"]
+    problems = project_gate_problems(ctx)
+    if problems:  # fail now at zero LLM cost instead of after a full run
+        ctx.events.emit("preflight_failed", problems=problems)
+        return {"final_status": "UNRESOLVED_REQUIREMENT", "control_fingerprint": ctx.fingerprint(),
+                "diagnosis": "mandatory gates cannot run: " + "; ".join(problems)}
     ws = ctx.workspaces
     # Start from the exact baseline, discarding anything a crashed attempt left behind.
     ws.restore(ctx.run_id, commit)

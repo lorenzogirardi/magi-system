@@ -124,9 +124,10 @@ def test_no_success_when_a_mandatory_check_cannot_run(tmp_path):
     files["Makefile"] = "build:\n\tsh -n src/greet.sh\n\ntest:\n\tsh tests/run.sh\n"  # no lint target
     r = Run(tmp_path, files=files)
     out = r.start()
-    assert r.gates()["project.lint"] == "UNKNOWN"
-    assert out.status.value == "FAILED_VERIFICATION"
-    assert "project.lint=UNKNOWN" in out.diagnosis
+    # preflight: stops at intake, before any model call, naming what to add
+    assert out.status.value == "UNRESOLVED_REQUIREMENT"
+    assert "project.lint" in out.diagnosis and ".magi/config.yaml" in out.diagnosis
+    assert not r.events("llm_call") and r.events("preflight_failed")
 
 
 def test_not_applicable_requires_policy_and_justification(tmp_path):

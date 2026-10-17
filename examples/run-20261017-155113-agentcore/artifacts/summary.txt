@@ -1,0 +1,38 @@
+run_id: run-20261017-155113
+repo: https://github.com/lorenzogirardi/fastapi-agentcore.git
+ref: main
+status: SUCCESS
+outcome: SUCCESS
+diagnosis: all mandatory gates passed on the final candidate (verified change only; not integrated or deployed)
+final_commit: 067510f2ab576e5680726fa3ac4298d9af4e1f47
+stopped_by_watcher: None
+duration_seconds: 1654
+llm_calls: 116
+tokens_in: 5474396
+tokens_out: 663977
+model_cost_usd: 1.3517
+provider_reported_cost_usd: 1.3517
+infra_active_seconds: 1636
+infra_cost_usd_estimate: 0.1227
+has_patch: True
+log_dir: magi-results/run-20261017-155113
+total_cost_usd_estimate: 1.4744
+gates:
+  integrity.protected_paths: PASS
+  magi.final_review: PASS
+  project.build: PASS
+  project.lint: PASS
+  project.test: PASS
+  qa.acceptance: PASS
+  qa.scenario:acc-app-starts-no-regression: PASS
+  qa.scenario:acc-catalog-lists-three-tools: PASS
+  qa.scenario:acc-json-validate-behaviour: PASS
+  qa.scenario:acc-k8s-manifest-inspect-behaviour: PASS
+  qa.scenario:acc-openapi-documents-toolbox: PASS
+  qa.scenario:acc-over-limit-controlled-error: PASS
+  qa.scenario:acc-text-diff-behaviour: PASS
+  qa.scenario:acc-toolbox-requires-auth: PASS
+  qa.scenario:acc-toolbox-routes-registered: PASS
+  scope.write_scopes: PASS
+  security.review: PASS
+  sre.review: PASS

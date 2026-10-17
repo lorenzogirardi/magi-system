@@ -110,6 +110,47 @@ resource "aws_s3_bucket_ownership_controls" "checkpoints" {
   }
 }
 
+# --- S3: the magi-system code bundles (deploy/agentcore/push_code.py) ---------------------
+# New sessions download code/current.json's bundle at start (bootstrap.py), so a code change needs no
+# image build and no apply. Whoever can write here runs code in the orchestrator, which holds the
+# OpenRouter key and the runtime role: the bucket is private, versioned and encrypted, the runtime role
+# can only read code/*, and writing is for the person deploying (their own AWS credentials).
+
+resource "aws_s3_bucket" "code" {
+  bucket_prefix = "${var.name}-code-"
+}
+
+resource "aws_s3_bucket_public_access_block" "code" {
+  bucket                  = aws_s3_bucket.code.id
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "code" {
+  bucket = aws_s3_bucket.code.id
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
+}
+
+resource "aws_s3_bucket_ownership_controls" "code" {
+  bucket = aws_s3_bucket.code.id
+  rule {
+    object_ownership = "BucketOwnerEnforced"
+  }
+}
+
+resource "aws_s3_bucket_versioning" "code" {
+  bucket = aws_s3_bucket.code.id
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
 # --- ECR: the magi-agentcore image (built from deploy/agentcore/Dockerfile) --------------
 
 resource "aws_ecr_repository" "agentcore" {

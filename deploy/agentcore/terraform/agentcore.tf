@@ -56,6 +56,7 @@ resource "aws_bedrockagentcore_agent_runtime" "magi" {
     MAGI_DYNAMODB_RUNS_TABLE        = aws_dynamodb_table.runs.name
     MAGI_DYNAMODB_CHECKPOINT_TABLE  = aws_dynamodb_table.checkpoints.name
     MAGI_CHECKPOINT_S3_BUCKET       = aws_s3_bucket.checkpoints.bucket
+    MAGI_CODE_BUCKET                = aws_s3_bucket.code.bucket
     MAGI_CHECKPOINT_TTL_SECONDS     = var.checkpoint_ttl_days > 0 ? tostring(var.checkpoint_ttl_days * 86400) : ""
     MAGI_OPENROUTER_SECRET_ID       = aws_secretsmanager_secret.openrouter.arn
     MAGI_ALLOWED_PROFILES           = "agentcore"

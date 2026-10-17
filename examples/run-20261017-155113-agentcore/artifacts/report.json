@@ -1,0 +1,2006 @@
+{
+  "candidate_patch": "diff --git a/.env.example b/.env.example\nindex 624e39a..dac7fce 100644\n--- a/.env.example\n+++ b/.env.example\n@@ -21,6 +21,17 @@ ERROR_INJECTION_ENABLED=true\n ERROR_INJECTION_MAX_DELAY_MS=10000\n # SSRF_PROTECTION_ENABLED=true   # block loopback/private/metadata in /api/debug + MCP tools\n \n+# === Dev/SRE Toolbox (/api/toolbox, Basic Auth) ===\n+# Limits are enforced, never silently truncated: exceeding one returns HTTP 413\n+# naming the limit. See docs/14-dev-sre-toolbox.md.\n+TOOLBOX_MAX_INPUT_BYTES=262144\n+TOOLBOX_MAX_YAML_DOCUMENTS=50\n+TOOLBOX_MAX_YAML_DEPTH=50\n+TOOLBOX_MAX_YAML_ALIASES=100\n+TOOLBOX_MAX_FINDINGS=500\n+TOOLBOX_MAX_DIFF_CONTEXT_LINES=10\n+TOOLBOX_RUN_TIMEOUT_SECONDS=10\n+\n # === Redis ===\n # Development: redis://redis:6379/0  (docker-compose service)\n # Production:  https://your-redis-endpoint.example.com  (HTTP/S endpoint)\ndiff --git a/CHANGELOG.md b/CHANGELOG.md\nindex 2bcef1c..20d73bf 100644\n--- a/CHANGELOG.md\n+++ b/CHANGELOG.md\n@@ -8,6 +8,7 @@ Entries are added automatically on every merge to the default branch.\n ## [Unreleased]\n \n ### Added\n+- Dev/SRE Toolbox (`/api/toolbox`): a modular, synchronous, read-only catalog of developer/SRE utilities (`json.validate`, `text.diff`, `k8s.manifest.inspect`) inside the existing FastAPI app, behind the existing Basic Auth, with env-driven limits and no new infrastructure. See [docs/14-dev-sre-toolbox.md](docs/14-dev-sre-toolbox.md).\n - Role-based agent pipeline (`agent-pipeline.yml`): an issue labelled `agent` is planned, implemented, checked, reviewed by two independent reviewers, fixed in a bounded loop, finally reviewed, documented and opened as a PR. It never merges.\n - `agent-change.yml`: the same review and fix loop on every pull request except Renovate's (fix commits are pushed to the PR branch) and on every push straight to `main` (a fix PR is opened if something blocks).\n - Deterministic changelog workflow (`changelog.yml`): one entry per push to `main`, no model involved.\ndiff --git a/README.md b/README.md\nindex 8fe5218..220202f 100755\n--- a/README.md\n+++ b/README.md\n@@ -5,7 +5,7 @@ Migrated from Flask v1 \u2014 all original features preserved + major new capabilit\n \n ## Architecture\n \n-```\n+\n \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n \u2502                    FastAPI App                        \u2502\n \u2502  \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2510  \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510  \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2510  \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510  \u2502\n@@ -16,12 +16,12 @@ Migrated from Flask v1 \u2014 all original features preserved + major new capabilit\n \u2502  \u250c\u2500\u2500\u25bc\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u25bc\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u25bc\u2500\u2500\u2500\u2510                      \u2502\n \u2502  \u2502    Unified Storage Layer   \u2502                      \u2502\n \u2502  \u2502  PG \u2192 Redis \u2192 In-Memory   \u2502                      \u2502\n-\u2502  \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518                      \u2502\n+\u2502  \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518                      \u2502\n \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n          \u2502              \u2502              \u2502\n     PostgreSQL       Redis        Prometheus\n     (optional)     (optional)     + OTEL\n-```\n+\n \n **Fallback strategy**: PostgreSQL \u2192 Redis \u2192 In-Memory (automatic, zero-downtime).\n \n@@ -31,37 +31,37 @@ Migrated from Flask v1 \u2014 all original features preserved + major new capabilit\n ## Quick Start\n \n ### Local development (docker-compose)\n-```bash\n+bash\n cp .env.example .env\n docker compose up -d\n # App at http://localhost:8000\n # Swagger UI at http://localhost:8000/docs\n # ReDoc at http://localhost:8000/redoc\n # Prometheus at http://localhost:9090\n-```\n+\n \n ### Local development (bare metal)\n-```bash\n+bash\n pip install -r requirements.txt\n # Without PG/Redis (in-memory only):\n APP_ENV=development uvicorn app.main:app --reload --port 8000\n-```\n+\n \n ### Production (Kubernetes + Helm)\n \n-```bash\n+bash\n helm install pytbak ./helm/pytbak \\\n   --set postgresql.url=\"postgresql+asyncpg://user:pass@pg-host:5432/db\" \\\n   --set redis.url=\"redis://redis-host:6379/0\" \\\n   --set auth.username=admin \\\n   --set auth.password=secure123\n-```\n+\n \n ### izanami cluster (192.168.1.14) \u2014 Redis + PostgreSQL dedicati\n \n Redis e PostgreSQL sono deployati come chart indipendenti (fuori da questo repo):\n \n-```bash\n+bash\n # 1. Redis + Webdis (~/Storage/home/helm-redis)\n helm upgrade --install redis ~/Storage/home/helm-redis \\\n   --kube-context izanami \\\n@@ -80,7 +80,7 @@ helm upgrade pytbak ./helm/pytbak \\\n   --set auth.password=<AUTH_PASSWORD> \\\n   --set redis.url=\"redis://:REDIS_PASSWORD@redis.redis.svc.cluster.local:6379/0\" \\\n   --set postgresql.url=\"postgresql+asyncpg://pytbak:PG_PASSWORD@postgresql.postgresql.svc.cluster.local:5432/pytbak\"\n-```\n+\n \n > **Nota microk8s**: il provisioner hostpath non funziona con K8s 1.20+.\n > Creare i PV manuali prima del deploy \u2014 vedere i README dei rispettivi chart.\n@@ -129,7 +129,7 @@ pytbak. 23 tools mirroring the REST API for LLM clients (Claude, OpenCode, etc.)\n [docs/11-mcp-server.md](docs/11-mcp-server.md) for architecture, auth model, and full usage\n examples.\n \n-```bash\n+bash\n # Python SDK example\n python3 -c \"\n import asyncio, httpx\n@@ -146,7 +146,28 @@ async def main():\n \n asyncio.run(main())\n \"\n-```\n+\n+\n+### Dev/SRE Toolbox (`/api/toolbox`) \u2014 requires Basic Auth\n+Modular, synchronous, read-only catalog of developer/SRE utilities inside the same\n+app: `json.validate`, `text.diff` and `k8s.manifest.inspect` (static, offline\n+Kubernetes manifest checks). Env-driven limits, no queue, no new infrastructure \u2014\n+see [docs/14-dev-sre-toolbox.md](docs/14-dev-sre-toolbox.md).\n+\n+bash\n+# List the tools\n+curl -s -u admin:password http://localhost:8000/api/toolbox/tools\n+\n+# Validate JSON\n+curl -s -u admin:password -X POST http://localhost:8000/api/toolbox/runs \\\n+  -H \"Content-Type: application/json\" \\\n+  -d '{\"tool\": \"json.validate\", \"input\": {\"text\": \"{\\\"a\\\": 1}\"}}'\n+\n+# Diff two strings\n+curl -s -u admin:password -X POST http://localhost:8000/api/toolbox/runs \\\n+  -H \"Content-Type: application/json\" \\\n+  -d '{\"tool\": \"text.diff\", \"input\": {\"left\": \"a\\nb\\n\", \"right\": \"a\\nc\\n\"}}'\n+\n \n ### Observability\n | Path | Description |\n@@ -163,7 +184,7 @@ asyncio.run(main())\n ## Debug Features\n \n ### Error Injection (any endpoint)\n-```bash\n+bash\n # Inject HTTP 500\n curl http://localhost:8000/api/contexts?inject_error=500\n \n@@ -175,34 +196,34 @@ curl http://localhost:8000/api/contexts?inject_error=validation_error\n \n # Custom error message\n curl http://localhost:8000/api/contexts?inject_error=custom:database_timeout\n-```\n+\n \n ### Delay Injection (any endpoint)\n-```bash\n+bash\n # Fixed delay 3 seconds\n curl http://localhost:8000/api/contexts?delay_ms=3000\n \n # Random delay 0-5 seconds\n curl http://localhost:8000/api/contexts?delay_ms=random\n-```\n+\n \n ### CPU Spike\n-```bash\n+bash\n curl -X POST http://localhost:8000/debug/cpu/spike \\\n   -u admin:password \\\n   -H \"Content-Type: application/json\" \\\n   -d '{\"duration\": 30, \"cores\": 2}'\n-```\n+\n \n ### Network Scan\n-```bash\n+bash\n curl \"http://localhost:8000/debug/network/scan?target=google.com:443\" \\\n   -u admin:password\n-```\n+\n \n ## curl Examples\n \n-```bash\n+bash\n # Create context\n curl -X POST http://localhost:8000/api/contexts \\\n   -H \"Content-Type: application/json\" \\\n@@ -245,7 +266,7 @@ curl -u admin:password http://localhost:8000/debug/headers\n \n # Random error (auth required)\n curl -u admin:password http://localhost:8000/debug/random-error\n-```\n+\n \n ## Usage \u2014 Verified Docker Test Session\n \n@@ -254,7 +275,7 @@ All 5 containers running: **web**, **postgres**, **redis**, **prometheus**, **ot\n \n ### 1. Health Check \u2014 PostgreSQL & Redis connected\n \n-```bash\n+bash\n $ curl -s http://localhost:8000/mgmt/health | python3 -m json.tool\n {\n     \"status\": \"UP\",\n@@ -263,11 +284,11 @@ $ curl -s http://localhost:8000/mgmt/health | python3 -m json.tool\n         { \"name\": \"postgresql\", \"status\": \"UP\", \"error\": null }\n     ]\n }\n-```\n+\n \n ### 2. Readiness & App Info\n \n-```bash\n+bash\n $ curl -s http://localhost:8000/mgmt/ready\n {\"status\": \"READY\", \"version\": \"2.0.0\"}\n \n@@ -280,11 +301,11 @@ $ curl -s http://localhost:8000/mgmt/info | python3 -m json.tool\n         \"environment\": \"development\"\n     }\n }\n-```\n+\n \n ### 3. CRUD Contexts (stored in PostgreSQL)\n \n-```bash\n+bash\n # Create\n $ curl -s -X POST http://localhost:8000/api/contexts \\\n   -H \"Content-Type: application/json\" \\\n@@ -320,11 +341,11 @@ $ curl -s -X DELETE http://localhost:8000/api/contexts/ff0aa92e-...\n # Verify empty\n $ curl -s http://localhost:8000/api/contexts\n []\n-```\n+\n \n ### 4. Legacy Endpoints\n \n-```bash\n+bash\n # Fibonacci\n $ curl -s http://localhost:8000/api/fib/10\n {\"result\": \"55\"}\n@@ -336,26 +357,26 @@ $ curl -s http://localhost:8000/api/sleep/1\n # Redis counter\n $ curl -s http://localhost:8000/api/count\n {\"counter\": 1}\n-```\n+\n \n ### 5. Error Injection (any endpoint)\n \n-```bash\n+bash\n $ curl -s http://localhost:8000/mgmt/info?inject_error=500\n {\"error\": \"Injected error 500\", \"injected\": true}\n-```\n+\n \n ### 6. Delay Injection\n \n-```bash\n+bash\n $ time curl -s http://localhost:8000/mgmt/ready?delay_ms=200\n {\"status\": \"READY\", \"version\": \"2.0.0\"}\n real    0m0.222s   # ~200ms delay confirmed\n-```\n+\n \n ### 7. Debug Endpoints (Basic Auth required)\n \n-```bash\n+bash\n # Echo headers\n $ curl -s -u admin:password http://localhost:8000/debug/headers\n {\n@@ -372,11 +393,11 @@ $ curl -s -u admin:password \"http://localhost:8000/debug/dns?name=google.com\"\n # Without auth \u2192 401\n $ curl -s http://localhost:8000/debug/headers\n {\"detail\": \"Not authenticated\"}   # HTTP 401\n-```\n+\n \n ### 8. Environment Variables (whitelisted)\n \n-```bash\n+bash\n $ curl -s http://localhost:8000/mgmt/env | python3 -m json.tool\n {\n     \"PATH\": \"/usr/local/bin:...\",\n@@ -386,11 +407,11 @@ $ curl -s http://localhost:8000/mgmt/env | python3 -m json.tool\n     \"DATABASE_URL\": \"postgresql+asyncpg://pytbak:pytbak@postgres:5432/pytbak\",\n     \"REDIS_URL\": \"redis://redis:6379/0\"\n }\n-```\n+\n \n ### 9. Swagger UI & Prometheus Metrics\n \n-```bash\n+bash\n # Swagger UI\n $ curl -s -o /dev/null -w \"%{http_code}\" http://localhost:8000/docs\n 200\n@@ -400,15 +421,15 @@ $ curl -s http://localhost:8000/metrics | head -3\n # HELP python_gc_objects_collected_total Objects collected during gc\n # TYPE python_gc_objects_collected_total counter\n python_gc_objects_collected_total{generation=\"0\"} 728.0\n-```\n+\n \n ### 10. Route Mappings\n \n-```bash\n+bash\n $ curl -s http://localhost:8000/mgmt/mappings | python3 -c \\\n   \"import sys,json; print(f'{len(json.load(sys.stdin)[\\\"mappings\\\"])} routes registered')\"\n 31 routes registered\n-```\n+\n \n ### Test Summary\n \n@@ -455,15 +476,15 @@ All configuration via environment variables (Pydantic Settings). See [.env.examp\n \n ## Tests\n \n-```bash\n+bash\n pip install -r requirements.txt\n pytest -v --tb=short\n pytest --cov=app --cov-report=term-missing\n-```\n+\n \n ## Project Structure\n \n-```\n+\n \u251c\u2500\u2500 app/\n \u2502   \u251c\u2500\u2500 main.py                  # FastAPI app + lifespan + create_app()\n \u2502   \u251c\u2500\u2500 auth.py                  # Basic auth dependency\n@@ -506,11 +527,11 @@ pytest --cov=app --cov-report=term-missing\n \u251c\u2500\u2500 requirements.txt\n \u251c\u2500\u2500 pyproject.toml\n \u2514\u2500\u2500 .env.example\n-```\n+\n \n ## Sequence Diagram\n \n-```mermaid\n+mermaid\n sequenceDiagram\n     participant Client\n     participant FastAPI\n@@ -533,7 +554,7 @@ sequenceDiagram\n     end\n     Storage-->>FastAPI: ContextResponse\n     FastAPI-->>Client: 201 Created\n-```\n+\n \n ## Migration from Flask v1\n \ndiff --git a/app/config/settings.py b/app/config/settings.py\nindex 675856c..71fd507 100644\n--- a/app/config/settings.py\n+++ b/app/config/settings.py\n@@ -68,6 +68,29 @@ class Settings(BaseSettings):\n     rate_limit: str = \"100/minute\"\n     debug_rate_limit: str = \"10/minute\"\n \n+    # --- Dev/SRE Toolbox limits (env-driven, no silent truncation) ---\n+    toolbox_max_input_bytes: int = Field(\n+        default=262144, description=\"Max input size in bytes accepted by a toolbox run\"\n+    )\n+    toolbox_max_yaml_documents: int = Field(\n+        default=50, description=\"Max YAML documents accepted by k8s.manifest.inspect\"\n+    )\n+    toolbox_max_yaml_depth: int = Field(\n+        default=50, description=\"Max YAML nesting depth accepted by k8s.manifest.inspect\"\n+    )\n+    toolbox_max_yaml_aliases: int = Field(\n+        default=100, description=\"Max YAML alias/anchor expansions accepted by k8s.manifest.inspect\"\n+    )\n+    toolbox_max_findings: int = Field(\n+        default=500, description=\"Max findings returned by a toolbox run\"\n+    )\n+    toolbox_max_diff_context_lines: int = Field(\n+        default=10, description=\"Max context lines accepted by text.diff\"\n+    )\n+    toolbox_run_timeout_seconds: float = Field(\n+        default=10.0, description=\"Timeout for a single toolbox run\"\n+    )\n+\n     # --- OTEL ---\n     otel_enabled: bool = False\n     otel_exporter_otlp_endpoint: str = \"http://localhost:4317\"\ndiff --git a/app/main.py b/app/main.py\nindex 8353bf1..58a576a 100644\n--- a/app/main.py\n+++ b/app/main.py\n@@ -173,10 +173,12 @@ def create_app() -> FastAPI:\n     from app.routers.api import router as api_router\n     from app.routers.home import router as home_router\n     from app.routers.mgmt import router as mgmt_router\n+    from app.routers.toolbox import router as toolbox_router\n \n     app.include_router(api_router)\n     app.include_router(mgmt_router)\n     app.include_router(home_router)\n+    app.include_router(toolbox_router)\n \n     # Debug endpoints (can be disabled in production)\n     if settings.debug_endpoints_enabled:\ndiff --git a/app/models/toolbox.py b/app/models/toolbox.py\nnew file mode 100644\nindex 0000000..a84a12d\n--- /dev/null\n+++ b/app/models/toolbox.py\n@@ -0,0 +1,84 @@\n+\"\"\"Pydantic models for the Dev/SRE Toolbox API.\n+\n+These models define the wire contract only. The analysis logic lives in\n+``app/toolbox/`` and does not import FastAPI or these models.\n+\"\"\"\n+\n+from __future__ import annotations\n+\n+from typing import Any, Literal\n+\n+from pydantic import BaseModel, Field\n+\n+Severity = Literal[\"info\", \"warning\", \"error\"]\n+\n+\n+class FindingLocation(BaseModel):\n+    \"\"\"Where a finding was observed. Fields are optional: not every tool has a\n+    Kubernetes-shaped location.\"\"\"\n+\n+    document_index: int | None = Field(default=None, description=\"Index of the YAML document (0-based).\")\n+    resource_kind: str | None = Field(default=None, description=\"Kubernetes kind, when applicable.\")\n+    resource_name: str | None = Field(default=None, description=\"Kubernetes resource name, when applicable.\")\n+    path: str = Field(default=\"\", description=\"Dotted path inside the analysed document.\")\n+\n+\n+class Finding(BaseModel):\n+    \"\"\"One observation. A finding is never an HTTP error.\"\"\"\n+\n+    code: str = Field(..., description=\"Stable machine-readable finding code.\")\n+    severity: Severity = Field(..., description=\"info | warning | error\")\n+    category: str = Field(\n+        ...,\n+        description=\"missing_configuration | risky_configuration | informational\",\n+    )\n+    message: str = Field(..., description=\"Human-readable description.\")\n+    location: FindingLocation = Field(default_factory=FindingLocation)\n+    suggestion: str | None = Field(default=None, description=\"Optional remediation hint.\")\n+\n+\n+class FindingSummary(BaseModel):\n+    \"\"\"Finding counts per severity.\"\"\"\n+\n+    info: int = 0\n+    warning: int = 0\n+    error: int = 0\n+\n+\n+class ToolRunRequest(BaseModel):\n+    \"\"\"Request body for POST /api/toolbox/runs.\"\"\"\n+\n+    tool: str = Field(..., description=\"Identifier of the tool to run.\")\n+    input: dict[str, Any] = Field(\n+        default_factory=dict,\n+        description=\"Tool-specific input payload, validated against the tool's input schema.\",\n+    )\n+\n+\n+class ToolRunResponse(BaseModel):\n+    \"\"\"Uniform result contract shared by every tool.\"\"\"\n+\n+    run_id: str = Field(..., description=\"Correlation id for this run (response, logs, tracing).\")\n+    tool: str\n+    tool_version: str\n+    status: str = Field(..., description=\"Execution status: completed | failed.\")\n+    outcome: str = Field(..., description=\"Analysis outcome: pass | fail.\")\n+    summary: FindingSummary\n+    findings: list[Finding] = Field(default_factory=list)\n+    output: dict[str, Any] = Field(default_factory=dict)\n+    duration_ms: int\n+\n+\n+class ToolCatalogEntry(BaseModel):\n+    \"\"\"One entry of the tool catalog.\"\"\"\n+\n+    id: str\n+    description: str\n+    version: str\n+    input_schema: dict[str, Any] = Field(..., description=\"JSON Schema of the tool input model.\")\n+\n+\n+class ToolCatalogResponse(BaseModel):\n+    \"\"\"Response body for GET /api/toolbox/tools.\"\"\"\n+\n+    tools: list[ToolCatalogEntry] = Field(default_factory=list)\ndiff --git a/app/routers/toolbox.py b/app/routers/toolbox.py\nnew file mode 100644\nindex 0000000..13531fa\n--- /dev/null\n+++ b/app/routers/toolbox.py\n@@ -0,0 +1,240 @@\n+\"\"\"Dev/SRE Toolbox router.\n+\n+Thin HTTP layer over ``app/toolbox``: it validates the request, resolves the\n+tool from the explicit registry, dispatches the CPU-bound analysis to a worker\n+thread (the same pattern ``/api/fib/{x}`` already uses) and maps the outcome to\n+the documented result contract.\n+\n+Error mapping (kept deliberately distinct):\n+\n+* unknown tool id            -> 404 ``{\"error\": \"Unknown tool\", \"detail\": ...}``\n+* tool input schema mismatch  -> 422 ``{\"error\": \"Invalid tool input\", ...}``\n+* configured limit exceeded   -> 413 ``{\"error\": \"Input exceeds limit\", ...}``\n+* run timeout                 -> 504 ``{\"error\": \"Tool run timed out\", ...}``\n+* unexpected internal error   -> 500 ``{\"error\": \"Internal server error\", \"detail\": \"run_id=...\"}``\n+\n+404/413/504 are returned as explicit ``JSONResponse`` objects rather than raised,\n+so the app-wide 400/404 handlers cannot collapse them into the generic\n+``{\"error\": \"Bad request\"}`` / ``{\"error\": \"Not found\"}`` envelopes.\n+\"\"\"\n+\n+from __future__ import annotations\n+\n+import asyncio\n+import time\n+import uuid\n+\n+from fastapi import APIRouter, Depends\n+from fastapi.responses import JSONResponse\n+from loguru import logger\n+from pydantic import ValidationError\n+\n+from app.auth import verify_credentials\n+from app.config import get_settings\n+from app.models.toolbox import (\n+    Finding,\n+    FindingLocation,\n+    FindingSummary,\n+    ToolCatalogEntry,\n+    ToolCatalogResponse,\n+    ToolRunRequest,\n+    ToolRunResponse,\n+)\n+from app.toolbox.base import ToolInputError, ToolLimitExceeded, ToolLimits, summarize, outcome_for\n+from app.toolbox.registry import get_tool, list_tools\n+\n+router = APIRouter(\n+    prefix=\"/api/toolbox\",\n+    tags=[\"Toolbox\"],\n+    dependencies=[Depends(verify_credentials)],\n+)\n+\n+\n+def _effective_limits() -> ToolLimits:\n+    \"\"\"Resolve the configured limits for one run.\"\"\"\n+    settings = get_settings()\n+    return ToolLimits(\n+        max_input_bytes=settings.toolbox_max_input_bytes,\n+        max_yaml_documents=settings.toolbox_max_yaml_documents,\n+        max_yaml_depth=settings.toolbox_max_yaml_depth,\n+        max_yaml_aliases=settings.toolbox_max_yaml_aliases,\n+        max_findings=settings.toolbox_max_findings,\n+        max_diff_context_lines=settings.toolbox_max_diff_context_lines,\n+    )\n+\n+\n+@router.get(\n+    \"/tools\",\n+    response_model=ToolCatalogResponse,\n+    summary=\"List the available toolbox tools\",\n+)\n+async def list_toolbox_tools() -> ToolCatalogResponse:\n+    \"\"\"Return identifier, description, version and input schema for every tool.\"\"\"\n+    entries = [\n+        ToolCatalogEntry(\n+            id=tool.id,\n+            description=tool.description,\n+            version=tool.version,\n+            input_schema=tool.input_model.model_json_schema(),\n+        )\n+        for tool in list_tools()\n+    ]\n+    return ToolCatalogResponse(tools=entries)\n+\n+\n+@router.post(\n+    \"/runs\",\n+    response_model=ToolRunResponse,\n+    summary=\"Run one toolbox tool synchronously\",\n+    responses={\n+        404: {\"description\": \"Unknown tool\"},\n+        413: {\"description\": \"Input exceeds a configured limit\"},\n+        422: {\"description\": \"Tool input does not match the tool input schema\"},\n+        500: {\"description\": \"Unexpected internal error\"},\n+        504: {\"description\": \"Tool run timed out\"},\n+    },\n+)\n+async def run_toolbox_tool(request: ToolRunRequest):\n+    \"\"\"Run one tool. Findings are part of a 200 response, never an HTTP error.\"\"\"\n+    run_id = str(uuid.uuid4())\n+    settings = get_settings()\n+\n+    tool = get_tool(request.tool)\n+    if tool is None:\n+        logger.info(\"toolbox run rejected | run_id={} tool={} status=unknown_tool\", run_id, request.tool)\n+        return JSONResponse(\n+            status_code=404,\n+            content={\"error\": \"Unknown tool\", \"detail\": request.tool},\n+        )\n+\n+    try:\n+        payload = tool.input_model.model_validate(request.input)\n+    except ValidationError as exc:\n+        logger.info(\"toolbox run rejected | run_id={} tool={} status=invalid_input\", run_id, tool.id)\n+        return JSONResponse(\n+            status_code=422,\n+            content={\n+                \"error\": \"Invalid tool input\",\n+                \"detail\": [\n+                    {\"loc\": list(err.get(\"loc\", ())), \"msg\": err.get(\"msg\", \"invalid\"), \"type\": err.get(\"type\", \"value_error\")}\n+                    for err in exc.errors()\n+                ],\n+            },\n+        )\n+\n+    limits = _effective_limits()\n+    loop = asyncio.get_running_loop()\n+    started = time.monotonic()\n+\n+    try:\n+        result = await asyncio.wait_for(\n+            loop.run_in_executor(None, tool.run, payload, limits),\n+            timeout=settings.toolbox_run_timeout_seconds,\n+        )\n+    except ToolLimitExceeded as exc:\n+        duration_ms = int((time.monotonic() - started) * 1000)\n+        logger.info(\n+            \"toolbox run rejected | run_id={} tool={} status=limit_exceeded limit={} duration_ms={}\",\n+            run_id,\n+            tool.id,\n+            exc.limit,\n+            duration_ms,\n+        )\n+        return JSONResponse(\n+            status_code=413,\n+            content={\n+                \"error\": \"Input exceeds limit\",\n+                \"detail\": f\"{exc.limit}: {exc.observed} > {exc.maximum}\",\n+            },\n+        )\n+    except ToolInputError as exc:\n+        duration_ms = int((time.monotonic() - started) * 1000)\n+        logger.info(\n+            \"toolbox run failed | run_id={} tool={} status=failed outcome=fail duration_ms={}\",\n+            run_id,\n+            tool.id,\n+            duration_ms,\n+        )\n+        return ToolRunResponse(\n+            run_id=run_id,\n+            tool=tool.id,\n+            tool_version=tool.version,\n+            status=\"failed\",\n+            outcome=\"fail\",\n+            summary=FindingSummary(error=1),\n+            findings=[\n+                Finding(\n+                    code=\"TOOL_INPUT_ERROR\",\n+                    severity=\"error\",\n+                    category=\"informational\",\n+                    message=str(exc),\n+                    location=FindingLocation(path=\"input\"),\n+                    suggestion=None,\n+                )\n+            ],\n+            output={},\n+            duration_ms=duration_ms,\n+        )\n+    except asyncio.TimeoutError:\n+        duration_ms = int((time.monotonic() - started) * 1000)\n+        logger.warning(\n+            \"toolbox run timed out | run_id={} tool={} status=timeout duration_ms={}\",\n+            run_id,\n+            tool.id,\n+            duration_ms,\n+        )\n+        return JSONResponse(\n+            status_code=504,\n+            content={\n+                \"error\": \"Tool run timed out\",\n+                \"detail\": f\"timeout_seconds: {settings.toolbox_run_timeout_seconds}\",\n+            },\n+        )\n+    except Exception:\n+        duration_ms = int((time.monotonic() - started) * 1000)\n+        # No traceback, no exception text: only the correlation id leaves the process.\n+        logger.exception(\n+            \"toolbox run error | run_id={} tool={} status=error duration_ms={}\",\n+            run_id,\n+            tool.id,\n+            duration_ms,\n+        )\n+        return JSONResponse(\n+            status_code=500,\n+            content={\"error\": \"Internal server error\", \"detail\": f\"run_id={run_id}\"},\n+        )\n+\n+    duration_ms = int((time.monotonic() - started) * 1000)\n+    summary = summarize(result.findings)\n+    outcome = outcome_for(result.findings)\n+\n+    logger.info(\n+        \"toolbox run | run_id={} tool={} status={} outcome={} duration_ms={}\",\n+        run_id,\n+        tool.id,\n+        result.status,\n+        outcome,\n+        duration_ms,\n+    )\n+\n+    return ToolRunResponse(\n+        run_id=run_id,\n+        tool=tool.id,\n+        tool_version=tool.version,\n+        status=result.status,\n+        outcome=outcome,\n+        summary=FindingSummary(**summary),\n+        findings=[\n+            Finding(\n+                code=f.code,\n+                severity=f.severity,\n+                category=f.category,\n+                message=f.message,\n+                location=FindingLocation(**f.location),\n+                suggestion=f.suggestion,\n+            )\n+            for f in result.findings\n+        ],\n+        output=result.output,\n+        duration_ms=duration_ms,\n+    )\ndiff --git a/app/toolbox/__init__.py b/app/toolbox/__init__.py\nnew file mode 100644\nindex 0000000..efa64d1\n--- /dev/null\n+++ b/app/toolbox/__init__.py\n@@ -0,0 +1,36 @@\n+\"\"\"Dev/SRE Toolbox: modular, synchronous, read-only utility catalog.\n+\n+Public surface:\n+\n+* ``app.toolbox.base``     \u2014 Tool protocol, limits, findings, result contract\n+* ``app.toolbox.registry`` \u2014 explicit registry of the available tools\n+* ``app.toolbox.tools``    \u2014 the tool implementations\n+\n+The package is pure Python: it never imports FastAPI, so every analysis\n+function is unit-testable in isolation.\n+\"\"\"\n+\n+from app.toolbox.base import (  # noqa: F401\n+    Finding,\n+    Tool,\n+    ToolInputError,\n+    ToolLimitExceeded,\n+    ToolLimits,\n+    ToolResult,\n+    outcome_for,\n+    summarize,\n+)\n+from app.toolbox.registry import get_tool, list_tools  # noqa: F401\n+\n+__all__ = [\n+    \"Finding\",\n+    \"Tool\",\n+    \"ToolInputError\",\n+    \"ToolLimitExceeded\",\n+    \"ToolLimits\",\n+    \"ToolResult\",\n+    \"outcome_for\",\n+    \"summarize\",\n+    \"get_tool\",\n+    \"list_tools\",\n+]\ndiff --git a/app/toolbox/base.py b/app/toolbox/base.py\nnew file mode 100644\nindex 0000000..854d12c\n--- /dev/null\n+++ b/app/toolbox/base.py\n@@ -0,0 +1,104 @@\n+\"\"\"Core contracts for the Dev/SRE Toolbox.\n+\n+This module is pure Python: it does not import FastAPI, so every analysis\n+function stays unit-testable and reusable outside the HTTP layer.\n+\"\"\"\n+\n+from __future__ import annotations\n+\n+from dataclasses import dataclass, field\n+from typing import Any, Protocol\n+\n+from pydantic import BaseModel\n+\n+# --- Finding vocabulary -----------------------------------------------------\n+SEVERITIES = (\"info\", \"warning\", \"error\")\n+\n+CATEGORY_MISSING = \"missing_configuration\"\n+CATEGORY_RISKY = \"risky_configuration\"\n+CATEGORY_INFO = \"informational\"\n+\n+\n+class ToolInputError(Exception):\n+    \"\"\"Input is structurally valid but cannot be analysed by the tool.\"\"\"\n+\n+\n+class ToolLimitExceeded(Exception):\n+    \"\"\"A configured limit was exceeded.\n+\n+    Carries the limit name, the observed value and the configured maximum so the\n+    router can return a controlled error that names the limit. Inputs are never\n+    silently truncated.\n+    \"\"\"\n+\n+    def __init__(self, limit: str, observed: int, maximum: int) -> None:\n+        self.limit = limit\n+        self.observed = observed\n+        self.maximum = maximum\n+        super().__init__(f\"{limit}: {observed} > {maximum}\")\n+\n+\n+@dataclass(frozen=True)\n+class ToolLimits:\n+    \"\"\"Effective limits for one run, resolved from Settings by the router.\"\"\"\n+\n+    max_input_bytes: int\n+    max_yaml_documents: int\n+    max_yaml_depth: int\n+    max_yaml_aliases: int\n+    max_findings: int\n+    max_diff_context_lines: int\n+\n+\n+@dataclass(frozen=True)\n+class Finding:\n+    \"\"\"One observation produced by a tool. Never an HTTP error.\"\"\"\n+\n+    code: str\n+    severity: str\n+    category: str\n+    message: str\n+    location: dict[str, Any] = field(default_factory=dict)\n+    suggestion: str | None = None\n+\n+\n+@dataclass\n+class ToolResult:\n+    \"\"\"Tool output. ``status`` is the execution status, not the analysis outcome.\"\"\"\n+\n+    findings: list[Finding] = field(default_factory=list)\n+    output: dict[str, Any] = field(default_factory=dict)\n+    status: str = \"completed\"\n+\n+\n+def summarize(findings: list[Finding]) -> dict[str, int]:\n+    \"\"\"Count findings per severity. Deterministic.\"\"\"\n+    summary = {\"info\": 0, \"warning\": 0, \"error\": 0}\n+    for finding in findings:\n+        if finding.severity in summary:\n+            summary[finding.severity] += 1\n+    return summary\n+\n+\n+def outcome_for(findings: list[Finding]) -> str:\n+    \"\"\"Analysis outcome: ``fail`` when any finding is a warning or an error.\n+\n+    ``info`` findings (for example \"the two texts differ\") do not fail a run.\n+    \"\"\"\n+    return \"fail\" if any(f.severity in (\"warning\", \"error\") for f in findings) else \"pass\"\n+\n+\n+class Tool(Protocol):\n+    \"\"\"Common interface implemented by every toolbox tool.\n+\n+    ``input_model`` is a Pydantic model used both to validate the request payload\n+    and to publish the tool's input schema in the catalog.\n+    \"\"\"\n+\n+    id: str\n+    version: str\n+    description: str\n+    input_model: type[BaseModel]\n+\n+    def run(self, payload: BaseModel, limits: ToolLimits) -> ToolResult:  # pragma: no cover - protocol\n+        ...\ndiff --git a/app/toolbox/registry.py b/app/toolbox/registry.py\nnew file mode 100644\nindex 0000000..765a7d6\n--- /dev/null\n+++ b/app/toolbox/registry.py\n@@ -0,0 +1,35 @@\n+\"\"\"Explicit toolbox registry.\n+\n+No dynamic import, no ``eval``/``exec``, no shell: the set of runnable tools is\n+fixed at import time and looked up by exact identifier. A duplicate identifier\n+is a programming error and fails fast at import.\n+\"\"\"\n+\n+from __future__ import annotations\n+\n+from app.toolbox.base import Tool\n+from app.toolbox.tools.json_validate import JsonValidateTool\n+from app.toolbox.tools.k8s_manifest import K8sManifestInspectTool\n+from app.toolbox.tools.text_diff import TextDiffTool\n+\n+_TOOLS: dict[str, Tool] = {}\n+\n+\n+def _register(tool: Tool) -> None:\n+    if tool.id in _TOOLS:\n+        raise RuntimeError(f\"Duplicate toolbox tool id: {tool.id}\")\n+    _TOOLS[tool.id] = tool\n+\n+\n+for _tool in (JsonValidateTool(), TextDiffTool(), K8sManifestInspectTool()):\n+    _register(_tool)\n+\n+\n+def get_tool(tool_id: str) -> Tool | None:\n+    \"\"\"Return the tool registered under ``tool_id``, or None.\"\"\"\n+    return _TOOLS.get(tool_id)\n+\n+\n+def list_tools() -> list[Tool]:\n+    \"\"\"Return the registered tools in registration order.\"\"\"\n+    return list(_TOOLS.values())\ndiff --git a/app/toolbox/tools/__init__.py b/app/toolbox/tools/__init__.py\nnew file mode 100644\nindex 0000000..12fead0\n--- /dev/null\n+++ b/app/toolbox/tools/__init__.py\n@@ -0,0 +1 @@\n+\"\"\"Tool implementations for the Dev/SRE Toolbox.\"\"\"\ndiff --git a/app/toolbox/tools/json_validate.py b/app/toolbox/tools/json_validate.py\nnew file mode 100644\nindex 0000000..63d68b0\n--- /dev/null\n+++ b/app/toolbox/tools/json_validate.py\n@@ -0,0 +1,85 @@\n+\"\"\"json.validate \u2014 syntactic validation of inline JSON text.\n+\n+The tool only ever looks at the string it is given. It does not fetch URLs and\n+does not read file paths: the input schema has a single free-text field, so\n+nothing is dereferenced.\n+\"\"\"\n+\n+from __future__ import annotations\n+\n+import json\n+\n+from pydantic import BaseModel, Field\n+\n+from app.toolbox.base import (\n+    CATEGORY_INFO,\n+    Finding,\n+    ToolLimitExceeded,\n+    ToolLimits,\n+    ToolResult,\n+)\n+\n+\n+class JsonValidateInput(BaseModel):\n+    \"\"\"Input schema for json.validate.\"\"\"\n+\n+    text: str = Field(\n+        ...,\n+        description=(\n+            \"Inline JSON text to validate. URLs and file paths are not accepted: \"\n+            \"the value is parsed as-is and never dereferenced.\"\n+        ),\n+    )\n+\n+\n+class JsonValidateTool:\n+    \"\"\"Check that a string is syntactically valid JSON.\"\"\"\n+\n+    id = \"json.validate\"\n+    version = \"1.0.0\"\n+    description = (\n+        \"Validate inline JSON text. Returns the parsed value, or a syntax error \"\n+        \"with its position when available. URLs and file paths are not accepted.\"\n+    )\n+    input_model = JsonValidateInput\n+\n+    def run(self, payload: JsonValidateInput, limits: ToolLimits) -> ToolResult:\n+        text = payload.text\n+\n+        size = len(text.encode(\"utf-8\"))\n+        if size > limits.max_input_bytes:\n+            raise ToolLimitExceeded(\"max_input_bytes\", size, limits.max_input_bytes)\n+\n+        if not text.strip():\n+            return ToolResult(\n+                findings=[\n+                    Finding(\n+                        code=\"JSON_EMPTY_INPUT\",\n+                        severity=\"error\",\n+                        category=CATEGORY_INFO,\n+                        message=\"Input is empty or whitespace only.\",\n+                        location={\"path\": \"text\"},\n+                        suggestion=\"Provide a JSON document to validate.\",\n+                    )\n+                ],\n+                output={\"valid\": False},\n+            )\n+\n+        try:\n+            value = json.loads(text)\n+        except json.JSONDecodeError as exc:\n+            return ToolResult(\n+                findings=[\n+                    Finding(\n+                        code=\"JSON_INVALID_SYNTAX\",\n+                        severity=\"error\",\n+                        category=CATEGORY_INFO,\n+                        message=f\"Invalid JSON: {exc.msg}\",\n+                        location={\"path\": f\"line {exc.lineno} column {exc.colno} (char {exc.pos})\"},\n+                        suggestion=\"Fix the syntax at the reported position and retry.\",\n+                    )\n+                ],\n+                output={\"valid\": False},\n+            )\n+\n+        return ToolResult(findings=[], output={\"valid\": True, \"value\": value})\ndiff --git a/app/toolbox/tools/k8s_manifest.py b/app/toolbox/tools/k8s_manifest.py\nnew file mode 100644\nindex 0000000..b45e885\n--- /dev/null\n+++ b/app/toolbox/tools/k8s_manifest.py\n@@ -0,0 +1,617 @@\n+\"\"\"k8s.manifest.inspect \u2014 static, offline checks on Kubernetes YAML manifests.\n+\n+Scope and honesty of the checks\n+-------------------------------\n+These are heuristic static checks over the manifest text that was supplied.\n+They are **neither a complete Kubernetes validation nor a security\n+certification**: no API server, no admission controller, no policy engine and no\n+cluster state is consulted. Only Deployment, StatefulSet and DaemonSet are\n+inspected in this MVP.\n+\n+Safety\n+------\n+* YAML is parsed with a ``yaml.SafeLoader`` subclass, so no arbitrary Python\n+  object is ever constructed.\n+* The loader enforces a composition-depth budget and an alias/anchor budget\n+  *during* composition, so a deeply nested or anchor-amplified document is\n+  rejected before it can be materialised.\n+* The composed object graph is walked again with a cycle-aware depth guard, so\n+  a self-referential anchor cannot cause an unbounded traversal.\n+* Input size, document count and finding count are bounded; exceeding any of\n+  them raises ``ToolLimitExceeded`` (a controlled error, never a truncation).\n+\"\"\"\n+\n+from __future__ import annotations\n+\n+from functools import partial\n+from typing import Any\n+\n+import yaml\n+from pydantic import BaseModel, Field\n+\n+from app.toolbox.base import (\n+    CATEGORY_INFO,\n+    CATEGORY_MISSING,\n+    CATEGORY_RISKY,\n+    Finding,\n+    ToolLimitExceeded,\n+    ToolLimits,\n+    ToolResult,\n+)\n+\n+DISCLAIMER = (\n+    \"Heuristic static checks on the supplied manifest only. This is neither a \"\n+    \"complete Kubernetes validation nor a security certification.\"\n+)\n+\n+SUPPORTED_KINDS = (\"Deployment\", \"StatefulSet\", \"DaemonSet\")\n+\n+\n+class K8sManifestInput(BaseModel):\n+    \"\"\"Input schema for k8s.manifest.inspect.\"\"\"\n+\n+    manifest: str = Field(\n+        ...,\n+        description=\"Kubernetes YAML manifest, possibly containing multiple documents.\",\n+    )\n+\n+\n+class _BoundedSafeLoader(yaml.SafeLoader):\n+    \"\"\"SafeLoader with a composition-depth budget and an alias budget.\"\"\"\n+\n+    def __init__(self, stream: Any, *, max_depth: int, max_aliases: int) -> None:\n+        super().__init__(stream)\n+        self._max_depth = max_depth\n+        self._max_aliases = max_aliases\n+        self._depth = 0\n+        self._aliases = 0\n+\n+    def compose_node(self, parent: Any, index: Any) -> Any:\n+        if self.check_event(yaml.AliasEvent):\n+            self._aliases += 1\n+            if self._aliases > self._max_aliases:\n+                raise ToolLimitExceeded(\"max_yaml_aliases\", self._aliases, self._max_aliases)\n+        self._depth += 1\n+        try:\n+            if self._depth > self._max_depth:\n+                raise ToolLimitExceeded(\"max_yaml_depth\", self._depth, self._max_depth)\n+            return super().compose_node(parent, index)\n+        finally:\n+            self._depth -= 1\n+\n+\n+def _assert_object_depth(obj: Any, max_depth: int) -> None:\n+    \"\"\"Cycle-aware depth guard over the composed object graph.\"\"\"\n+    seen: set[int] = set()\n+\n+    def walk(node: Any, depth: int) -> None:\n+        if depth > max_depth:\n+            raise ToolLimitExceeded(\"max_yaml_depth\", depth, max_depth)\n+        if isinstance(node, dict):\n+            if id(node) in seen:\n+                return\n+            seen.add(id(node))\n+            for value in node.values():\n+                walk(value, depth + 1)\n+        elif isinstance(node, list):\n+            if id(node) in seen:\n+                return\n+            seen.add(id(node))\n+            for value in node:\n+                walk(value, depth + 1)\n+\n+    walk(obj, 0)\n+\n+\n+def _yaml_error_message(exc: yaml.YAMLError) -> str:\n+    \"\"\"Report the problem and its position without echoing the source line.\"\"\"\n+    problem = getattr(exc, \"problem\", None) or \"syntax error\"\n+    mark = getattr(exc, \"problem_mark\", None)\n+    if mark is not None:\n+        return f\"{problem} (line {mark.line + 1}, column {mark.column + 1})\"\n+    return str(problem)\n+\n+\n+def _finding(\n+    code: str,\n+    severity: str,\n+    category: str,\n+    message: str,\n+    *,\n+    document_index: int | None,\n+    kind: str | None,\n+    name: str | None,\n+    path: str,\n+    suggestion: str | None = None,\n+) -> Finding:\n+    return Finding(\n+        code=code,\n+        severity=severity,\n+        category=category,\n+        message=message,\n+        location={\n+            \"document_index\": document_index,\n+            \"resource_kind\": kind,\n+            \"resource_name\": name,\n+            \"path\": path,\n+        },\n+        suggestion=suggestion,\n+    )\n+\n+\n+def _image_findings(\n+    image: Any,\n+    *,\n+    document_index: int,\n+    kind: str,\n+    name: str | None,\n+    path: str,\n+) -> list[Finding]:\n+    if not isinstance(image, str) or not image.strip():\n+        return [\n+            _finding(\n+                \"K8S_IMAGE_MISSING\",\n+                \"warning\",\n+                CATEGORY_MISSING,\n+                \"Container does not declare an image.\",\n+                document_index=document_index,\n+                kind=kind,\n+                name=name,\n+                path=path,\n+                suggestion=\"Pin an explicit image reference.\",\n+            )\n+        ]\n+\n+    # Digest reference (image@sha256:...) is immutable: nothing to report.\n+    if \"@\" in image:\n+        return []\n+\n+    last_segment = image.rsplit(\"/\", 1)[-1]\n+    if \":\" in last_segment:\n+        tag = last_segment.rsplit(\":\", 1)[1]\n+        if tag == \"latest\":\n+            return [\n+                _finding(\n+                    \"K8S_IMAGE_LATEST_TAG\",\n+                    \"warning\",\n+                    CATEGORY_RISKY,\n+                    f\"Image '{image}' uses the mutable 'latest' tag.\",\n+                    document_index=document_index,\n+                    kind=kind,\n+                    name=name,\n+                    path=path,\n+                    suggestion=\"Pin an immutable tag or a digest.\",\n+                )\n+            ]\n+        return []\n+\n+    return [\n+        _finding(\n+            \"K8S_IMAGE_NO_TAG\",\n+            \"warning\",\n+            CATEGORY_RISKY,\n+            f\"Image '{image}' has no tag and implicitly resolves to 'latest'.\",\n+            document_index=document_index,\n+            kind=kind,\n+            name=name,\n+            path=path,\n+            suggestion=\"Pin an immutable tag or a digest.\",\n+        )\n+    ]\n+\n+\n+def _container_findings(\n+    container: dict[str, Any],\n+    index: int,\n+    *,\n+    document_index: int,\n+    kind: str,\n+    name: str | None,\n+    base_path: str,\n+    is_init: bool,\n+    pod_security_context: dict[str, Any],\n+) -> list[Finding]:\n+    findings: list[Finding] = []\n+    container_path = f\"{base_path}[{index}]\"\n+    raw_name = container.get(\"name\")\n+    container_name = raw_name if isinstance(raw_name, str) else f\"#{index}\"\n+    label = \"Init container\" if is_init else \"Container\"\n+\n+    # --- resources: missing configuration ---\n+    resources = container.get(\"resources\")\n+    if not isinstance(resources, dict):\n+        resources = {}\n+    if not resources.get(\"requests\"):\n+        findings.append(\n+            _finding(\n+                \"K8S_MISSING_RESOURCE_REQUESTS\",\n+                \"warning\",\n+                CATEGORY_MISSING,\n+                f\"{label} '{container_name}' does not declare resource requests.\",\n+                document_index=document_index,\n+                kind=kind,\n+                name=name,\n+                path=f\"{container_path}.resources.requests\",\n+                suggestion=\"Declare CPU/memory requests so the scheduler can place the pod.\",\n+            )\n+        )\n+    if not resources.get(\"limits\"):\n+        findings.append(\n+            _finding(\n+                \"K8S_MISSING_RESOURCE_LIMITS\",\n+                \"warning\",\n+                CATEGORY_MISSING,\n+                f\"{label} '{container_name}' does not declare resource limits.\",\n+                document_index=document_index,\n+                kind=kind,\n+                name=name,\n+                path=f\"{container_path}.resources.limits\",\n+                suggestion=\"Declare CPU/memory limits to bound the container.\",\n+            )\n+        )\n+\n+    # --- probes: regular containers only, init containers run to completion ---\n+    if not is_init:\n+        if not container.get(\"readinessProbe\"):\n+            findings.append(\n+                _finding(\n+                    \"K8S_MISSING_READINESS_PROBE\",\n+                    \"warning\",\n+                    CATEGORY_MISSING,\n+                    f\"Container '{container_name}' has no readinessProbe.\",\n+                    document_index=document_index,\n+                    kind=kind,\n+                    name=name,\n+                    path=f\"{container_path}.readinessProbe\",\n+                    suggestion=\"Add a readinessProbe so traffic only reaches ready pods.\",\n+                )\n+            )\n+        if not container.get(\"livenessProbe\"):\n+            findings.append(\n+                _finding(\n+                    \"K8S_MISSING_LIVENESS_PROBE\",\n+                    \"warning\",\n+                    CATEGORY_MISSING,\n+                    f\"Container '{container_name}' has no livenessProbe.\",\n+                    document_index=document_index,\n+                    kind=kind,\n+                    name=name,\n+                    path=f\"{container_path}.livenessProbe\",\n+                    suggestion=\"Add a livenessProbe so a stuck container is restarted.\",\n+                )\n+            )\n+\n+    # --- image ---\n+    findings.extend(\n+        _image_findings(\n+            container.get(\"image\"),\n+            document_index=document_index,\n+            kind=kind,\n+            name=name,\n+            path=f\"{container_path}.image\",\n+        )\n+    )\n+\n+    # --- securityContext ---\n+    security_context = container.get(\"securityContext\")\n+    if not isinstance(security_context, dict):\n+        security_context = {}\n+\n+    if security_context.get(\"privileged\") is True:\n+        findings.append(\n+            _finding(\n+                \"K8S_PRIVILEGED_CONTAINER\",\n+                \"error\",\n+                CATEGORY_RISKY,\n+                f\"{label} '{container_name}' is configured as privileged.\",\n+                document_index=document_index,\n+                kind=kind,\n+                name=name,\n+                path=f\"{container_path}.securityContext.privileged\",\n+                suggestion=\"Disable privileged unless explicitly needed.\",\n+            )\n+        )\n+\n+    allow_escalation = security_context.get(\"allowPrivilegeEscalation\")\n+    if allow_escalation is True:\n+        findings.append(\n+            _finding(\n+                \"K8S_ALLOW_PRIVILEGE_ESCALATION_ENABLED\",\n+                \"error\",\n+                CATEGORY_RISKY,\n+                f\"{label} '{container_name}' explicitly allows privilege escalation.\",\n+                document_index=document_index,\n+                kind=kind,\n+                name=name,\n+                path=f\"{container_path}.securityContext.allowPrivilegeEscalation\",\n+                suggestion=\"Set allowPrivilegeEscalation: false.\",\n+            )\n+        )\n+    elif allow_escalation is not False:\n+        findings.append(\n+            _finding(\n+                \"K8S_ALLOW_PRIVILEGE_ESCALATION_NOT_DISABLED\",\n+                \"warning\",\n+                CATEGORY_MISSING,\n+                f\"{label} '{container_name}' does not explicitly disable privilege escalation.\",\n+                document_index=document_index,\n+                kind=kind,\n+                name=name,\n+                path=f\"{container_path}.securityContext.allowPrivilegeEscalation\",\n+                suggestion=\"Set allowPrivilegeEscalation: false explicitly.\",\n+            )\n+        )\n+\n+    # --- non-root: container level wins over pod level ---\n+    container_non_root = security_context.get(\"runAsNonRoot\")\n+    pod_non_root = pod_security_context.get(\"runAsNonRoot\")\n+    effective_non_root = container_non_root if container_non_root is not None else pod_non_root\n+    if effective_non_root is False:\n+        findings.append(\n+            _finding(\n+                \"K8S_RUN_AS_ROOT_ALLOWED\",\n+                \"error\",\n+                CATEGORY_RISKY,\n+                f\"{label} '{container_name}' explicitly allows running as root.\",\n+                document_index=document_index,\n+                kind=kind,\n+                name=name,\n+                path=f\"{container_path}.securityContext.runAsNonRoot\",\n+                suggestion=\"Set runAsNonRoot: true at pod or container level.\",\n+            )\n+        )\n+    elif effective_non_root is not True:\n+        findings.append(\n+            _finding(\n+                \"K8S_RUN_AS_NON_ROOT_NOT_REQUIRED\",\n+                \"warning\",\n+                CATEGORY_MISSING,\n+                f\"{label} '{container_name}' does not require non-root execution.\",\n+                document_index=document_index,\n+                kind=kind,\n+                name=name,\n+                path=f\"{container_path}.securityContext.runAsNonRoot\",\n+                suggestion=\"Set runAsNonRoot: true at pod or container level.\",\n+            )\n+        )\n+\n+    return findings\n+\n+\n+def _inspect_document(\n+    doc: Any, document_index: int\n+) -> tuple[list[Finding], dict[str, Any] | None, int]:\n+    \"\"\"Inspect one YAML document. Returns (findings, inspected_entry, containers_checked).\"\"\"\n+    findings: list[Finding] = []\n+\n+    if not isinstance(doc, dict):\n+        findings.append(\n+            _finding(\n+                \"K8S_DOCUMENT_NOT_MAPPING\",\n+                \"warning\",\n+                CATEGORY_INFO,\n+                \"Document is not a YAML mapping and was skipped.\",\n+                document_index=document_index,\n+                kind=None,\n+                name=None,\n+                path=\"\",\n+                suggestion=\"Provide a Kubernetes resource mapping.\",\n+            )\n+        )\n+        return findings, None, 0\n+\n+    kind = doc.get(\"kind\")\n+    metadata = doc.get(\"metadata\")\n+    name = metadata.get(\"name\") if isinstance(metadata, dict) and isinstance(metadata.get(\"name\"), str) else None\n+\n+    if kind not in SUPPORTED_KINDS:\n+        findings.append(\n+            _finding(\n+                \"K8S_UNSUPPORTED_KIND\",\n+                \"info\",\n+                CATEGORY_INFO,\n+                f\"Resource kind '{kind}' is not inspected by this tool.\",\n+                document_index=document_index,\n+                kind=kind if isinstance(kind, str) else None,\n+                name=name,\n+                path=\"kind\",\n+                suggestion=\"Only Deployment, StatefulSet and DaemonSet are inspected in this MVP.\",\n+            )\n+        )\n+        return findings, None, 0\n+\n+    spec = doc.get(\"spec\")\n+    template = spec.get(\"template\") if isinstance(spec, dict) else None\n+    pod_spec = template.get(\"spec\") if isinstance(template, dict) else None\n+\n+    if not isinstance(pod_spec, dict):\n+        findings.append(\n+            _finding(\n+                \"K8S_MISSING_POD_SPEC\",\n+                \"warning\",\n+                CATEGORY_MISSING,\n+                f\"{kind} '{name}' has no spec.template.spec; containers cannot be inspected.\",\n+                document_index=document_index,\n+                kind=kind,\n+                name=name,\n+                path=\"spec.template.spec\",\n+                suggestion=\"Provide a pod template spec.\",\n+            )\n+        )\n+        return findings, {\"document_index\": document_index, \"kind\": kind, \"name\": name}, 0\n+\n+    pod_security_context = pod_spec.get(\"securityContext\")\n+    if not isinstance(pod_security_context, dict):\n+        pod_security_context = {}\n+\n+    containers = pod_spec.get(\"containers\")\n+    if not isinstance(containers, list) or not containers:\n+        findings.append(\n+            _finding(\n+                \"K8S_NO_CONTAINERS\",\n+                \"warning\",\n+                CATEGORY_MISSING,\n+                f\"{kind} '{name}' declares no containers.\",\n+                document_index=document_index,\n+                kind=kind,\n+                name=name,\n+                path=\"spec.template.spec.containers\",\n+                suggestion=\"Declare at least one container.\",\n+            )\n+        )\n+        containers = []\n+\n+    init_containers = pod_spec.get(\"initContainers\")\n+    if not isinstance(init_containers, list):\n+        init_containers = []\n+\n+    checked = 0\n+    for index, container in enumerate(containers):\n+        if not isinstance(container, dict):\n+            findings.append(\n+                _finding(\n+                    \"K8S_CONTAINER_NOT_MAPPING\",\n+                    \"warning\",\n+                    CATEGORY_INFO,\n+                    f\"Container entry #{index} is not a mapping and was skipped.\",\n+                    document_index=document_index,\n+                    kind=kind,\n+                    name=name,\n+                    path=f\"spec.template.spec.containers[{index}]\",\n+                )\n+            )\n+            continue\n+        checked += 1\n+        findings.extend(\n+            _container_findings(\n+                container,\n+                index,\n+                document_index=document_index,\n+                kind=kind,\n+                name=name,\n+                base_path=\"spec.template.spec.containers\",\n+                is_init=False,\n+                pod_security_context=pod_security_context,\n+            )\n+        )\n+\n+    for index, container in enumerate(init_containers):\n+        if not isinstance(container, dict):\n+            findings.append(\n+                _finding(\n+                    \"K8S_CONTAINER_NOT_MAPPING\",\n+                    \"warning\",\n+                    CATEGORY_INFO,\n+                    f\"Init container entry #{index} is not a mapping and was skipped.\",\n+                    document_index=document_index,\n+                    kind=kind,\n+                    name=name,\n+                    path=f\"spec.template.spec.initContainers[{index}]\",\n+                )\n+            )\n+            continue\n+        checked += 1\n+        findings.extend(\n+            _container_findings(\n+                container,\n+                index,\n+                document_index=document_index,\n+                kind=kind,\n+                name=name,\n+                base_path=\"spec.template.spec.initContainers\",\n+                is_init=True,\n+                pod_security_context=pod_security_context,\n+            )\n+        )\n+\n+    return findings, {\"document_index\": document_index, \"kind\": kind, \"name\": name}, checked\n+\n+\n+class K8sManifestInspectTool:\n+    \"\"\"Static, offline inspection of Kubernetes workload manifests.\"\"\"\n+\n+    id = \"k8s.manifest.inspect\"\n+    version = \"1.0.0\"\n+    description = (\n+        \"Static checks on Kubernetes YAML manifests (multi-document supported) for \"\n+        \"Deployment, StatefulSet and DaemonSet. No cluster connection. Heuristic \"\n+        \"checks only: neither a complete Kubernetes validation nor a security \"\n+        \"certification.\"\n+    )\n+    input_model = K8sManifestInput\n+\n+    def run(self, payload: K8sManifestInput, limits: ToolLimits) -> ToolResult:\n+        manifest = payload.manifest\n+\n+        size = len(manifest.encode(\"utf-8\"))\n+        if size > limits.max_input_bytes:\n+            raise ToolLimitExceeded(\"max_input_bytes\", size, limits.max_input_bytes)\n+\n+        loader = partial(\n+            _BoundedSafeLoader,\n+            max_depth=limits.max_yaml_depth,\n+            max_aliases=limits.max_yaml_aliases,\n+        )\n+\n+        findings: list[Finding] = []\n+        documents = 0\n+        empty_documents = 0\n+        containers_checked = 0\n+        inspected: list[dict[str, Any]] = []\n+\n+        try:\n+            for document_index, doc in enumerate(yaml.load_all(manifest, Loader=loader)):\n+                documents += 1\n+                if documents > limits.max_yaml_documents:\n+                    raise ToolLimitExceeded(\n+                        \"max_yaml_documents\", documents, limits.max_yaml_documents\n+                    )\n+                if doc is None:\n+                    empty_documents += 1\n+                    continue\n+                _assert_object_depth(doc, limits.max_yaml_depth)\n+                doc_findings, inspected_entry, checked = _inspect_document(doc, document_index)\n+                findings.extend(doc_findings)\n+                containers_checked += checked\n+                if inspected_entry is not None:\n+                    inspected.append(inspected_entry)\n+        except yaml.YAMLError as exc:\n+            findings.append(\n+                Finding(\n+                    code=\"K8S_INVALID_YAML\",\n+                    severity=\"error\",\n+                    category=CATEGORY_INFO,\n+                    message=f\"Manifest is not valid YAML: {_yaml_error_message(exc)}\",\n+                    location={\n+                        \"document_index\": None,\n+                        \"resource_kind\": None,\n+                        \"resource_name\": None,\n+                        \"path\": \"\",\n+                    },\n+                    suggestion=\"Fix the YAML syntax and retry.\",\n+                )\n+            )\n+            return ToolResult(\n+                findings=findings,\n+                output={\n+                    \"documents\": documents,\n+                    \"empty_documents\": empty_documents,\n+                    \"inspected_resources\": inspected,\n+                    \"containers_checked\": containers_checked,\n+                    \"disclaimer\": DISCLAIMER,\n+                },\n+            )\n+\n+        if len(findings) > limits.max_findings:\n+            raise ToolLimitExceeded(\"max_findings\", len(findings), limits.max_findings)\n+\n+        return ToolResult(\n+            findings=findings,\n+            output={\n+                \"documents\": documents,\n+                \"empty_documents\": empty_documents,\n+                \"inspected_resources\": inspected,\n+                \"containers_checked\": containers_checked,\n+                \"disclaimer\": DISCLAIMER,\n+            },\n+        )\ndiff --git a/app/toolbox/tools/text_diff.py b/app/toolbox/tools/text_diff.py\nnew file mode 100644\nindex 0000000..5fca781\n--- /dev/null\n+++ b/app/toolbox/tools/text_diff.py\n@@ -0,0 +1,93 @@\n+\"\"\"text.diff \u2014 unified diff between two inline strings.\"\"\"\n+\n+from __future__ import annotations\n+\n+import difflib\n+\n+from pydantic import BaseModel, Field\n+\n+from app.toolbox.base import (\n+    CATEGORY_INFO,\n+    Finding,\n+    ToolLimitExceeded,\n+    ToolLimits,\n+    ToolResult,\n+)\n+\n+# Hard schema bound. The effective cap is also configurable through\n+# TOOLBOX_MAX_DIFF_CONTEXT_LINES and enforced again in run().\n+MAX_CONTEXT_LINES = 50\n+\n+\n+class TextDiffInput(BaseModel):\n+    \"\"\"Input schema for text.diff.\"\"\"\n+\n+    left: str = Field(..., description=\"Original text.\")\n+    right: str = Field(..., description=\"Modified text.\")\n+    context_lines: int = Field(\n+        default=3,\n+        ge=0,\n+        le=MAX_CONTEXT_LINES,\n+        description=f\"Context lines around each change (0-{MAX_CONTEXT_LINES}).\",\n+    )\n+\n+\n+class TextDiffTool:\n+    \"\"\"Return a unified diff between two strings.\"\"\"\n+\n+    id = \"text.diff\"\n+    version = \"1.0.0\"\n+    description = (\n+        \"Return a unified diff between two inline strings, with a configurable \"\n+        \"number of context lines.\"\n+    )\n+    input_model = TextDiffInput\n+\n+    def run(self, payload: TextDiffInput, limits: ToolLimits) -> ToolResult:\n+        if payload.context_lines > limits.max_diff_context_lines:\n+            raise ToolLimitExceeded(\n+                \"max_diff_context_lines\",\n+                payload.context_lines,\n+                limits.max_diff_context_lines,\n+            )\n+\n+        size = len(payload.left.encode(\"utf-8\")) + len(payload.right.encode(\"utf-8\"))\n+        if size > limits.max_input_bytes:\n+            raise ToolLimitExceeded(\"max_input_bytes\", size, limits.max_input_bytes)\n+\n+        diff_lines = list(\n+            difflib.unified_diff(\n+                payload.left.splitlines(),\n+                payload.right.splitlines(),\n+                fromfile=\"left\",\n+                tofile=\"right\",\n+                n=payload.context_lines,\n+                lineterm=\"\",\n+            )\n+        )\n+        identical = not diff_lines\n+        added = sum(1 for line in diff_lines if line.startswith(\"+\") and not line.startswith(\"+++\"))\n+        removed = sum(1 for line in diff_lines if line.startswith(\"-\") and not line.startswith(\"---\"))\n+\n+        findings: list[Finding] = []\n+        if not identical:\n+            findings.append(\n+                Finding(\n+                    code=\"TEXT_DIFF_DIFFERENT\",\n+                    severity=\"info\",\n+                    category=CATEGORY_INFO,\n+                    message=\"The two inputs differ.\",\n+                    location={\"path\": \"left/right\"},\n+                    suggestion=None,\n+                )\n+            )\n+\n+        return ToolResult(\n+            findings=findings,\n+            output={\n+                \"identical\": identical,\n+                \"diff\": \"\\n\".join(diff_lines),\n+                \"added_lines\": added,\n+                \"removed_lines\": removed,\n+            },\n+        )\ndiff --git a/docs/14-dev-sre-toolbox.md b/docs/14-dev-sre-toolbox.md\nnew file mode 100644\nindex 0000000..305149c\n--- /dev/null\n+++ b/docs/14-dev-sre-toolbox.md\n@@ -0,0 +1,302 @@\n+# 14 \u2014 Dev/SRE Toolbox\n+\n+**Status:** implemented (MVP). **Audience:** developers, SRE, security.\n+\n+## Explanation \u2014 what the feature is\n+\n+The Dev/SRE Toolbox is a small, self-contained catalog of technical utilities that\n+developers and SREs run through the existing API and that return a structured\n+result. It is deliberately **not** a new service and **not** a rewrite: it is a\n+package (`app/toolbox/`) plus one router (`app/routers/toolbox.py`) mounted by the\n+existing `create_app()` factory in `app/main.py`.\n+\n+Three tools ship in this MVP:\n+\n+| Tool id | Purpose |\n+|---------|---------|\n+| `json.validate` | Check that inline JSON text is syntactically valid; return the parsed value, or a syntax error with its position when available. |\n+| `text.diff` | Return a unified diff between two inline strings, with a configurable number of context lines. |\n+| `k8s.manifest.inspect` | Static, offline checks on Kubernetes YAML manifests (Deployment, StatefulSet, DaemonSet). |\n+\n+### The result contract\n+\n+Every run returns the same shape, regardless of the tool:\n+\n+\n+{\n+  \"run_id\": \"uuid\",\n+  \"tool\": \"k8s.manifest.inspect\",\n+  \"tool_version\": \"1.0.0\",\n+  \"status\": \"completed\",\n+  \"outcome\": \"fail\",\n+  \"summary\": {\"info\": 0, \"warning\": 2, \"error\": 1},\n+  \"findings\": [\n+    {\n+      \"code\": \"K8S_PRIVILEGED_CONTAINER\",\n+      \"severity\": \"error\",\n+      \"category\": \"risky_configuration\",\n+      \"message\": \"Container 'app' is configured as privileged.\",\n+      \"location\": {\n+        \"document_index\": 0,\n+        \"resource_kind\": \"Deployment\",\n+        \"resource_name\": \"example\",\n+        \"path\": \"spec.template.spec.containers[0].securityContext.privileged\"\n+      },\n+      \"suggestion\": \"Disable privileged unless explicitly needed.\"\n+    }\n+  ],\n+  \"output\": {},\n+  \"duration_ms\": 12\n+}\n+\n+\n+Four concepts are kept strictly distinct:\n+\n+| Concept | Where it lives | Example |\n+|---------|----------------|---------|\n+| Execution status | `status` | `completed`, `failed` |\n+| Analysis outcome | `outcome` | `pass`, `fail` |\n+| Request validation error | HTTP 422 | malformed body, or payload that does not match the tool input schema |\n+| Unexpected internal error | HTTP 500 | sanitized body carrying only `run_id` |\n+\n+A **finding is never an HTTP error**. A manifest with a privileged container is a\n+successful run (`status: completed`) whose analysis outcome is `fail`. Likewise,\n+syntactically invalid JSON or YAML is a *negative analysis result* (a finding),\n+not an HTTP error, because detecting that is the tool's purpose.\n+\n+`run_id` is a correlation id only: it appears in the response, in the structured\n+log line and (when tracing is enabled) in the span. There is no run persistence\n+and no `GET /runs/{id}`.\n+\n+## Tutorial \u2014 running the tools\n+\n+All toolbox endpoints require the same Basic Auth as `/api/debug/*` and\n+`/api/mcp` (`DIAG_USERNAME` / `DIAG_PASSWORD`).\n+\n+### List the catalog\n+\n+bash\n+curl -s -u admin:password http://localhost:8000/api/toolbox/tools | python3 -m json.tool\n+\n+\n+### Validate JSON\n+\n+bash\n+curl -s -u admin:password -X POST http://localhost:8000/api/toolbox/runs \\\n+  -H \"Content-Type: application/json\" \\\n+  -d '{\"tool\": \"json.validate\", \"input\": {\"text\": \"{\\\"a\\\": 1}\"}}'\n+\n+\n+\n+{\n+  \"run_id\": \"0f0c...\",\n+  \"tool\": \"json.validate\",\n+  \"tool_version\": \"1.0.0\",\n+  \"status\": \"completed\",\n+  \"outcome\": \"pass\",\n+  \"summary\": {\"info\": 0, \"warning\": 0, \"error\": 0},\n+  \"findings\": [],\n+  \"output\": {\"valid\": true, \"value\": {\"a\": 1}},\n+  \"duration_ms\": 1\n+}\n+\n+\n+Invalid JSON returns HTTP 200 with `outcome: \"fail\"` and a `JSON_INVALID_SYNTAX`\n+finding carrying the line/column/character position.\n+\n+### Diff two strings\n+\n+bash\n+curl -s -u admin:password -X POST http://localhost:8000/api/toolbox/runs \\\n+  -H \"Content-Type: application/json\" \\\n+  -d '{\"tool\": \"text.diff\", \"input\": {\"left\": \"a\\nb\\n\", \"right\": \"a\\nc\\n\", \"context_lines\": 3}}'\n+\n+\n+### Inspect a Kubernetes manifest\n+\n+bash\n+curl -s -u admin:password -X POST http://localhost:8000/api/toolbox/runs \\\n+  -H \"Content-Type: application/json\" \\\n+  -d '{\"tool\": \"k8s.manifest.inspect\", \"input\": {\"manifest\": \"apiVersion: apps/v1\\nkind: Deployment\\nmetadata:\\n  name: example\\nspec:\\n  template:\\n    spec:\\n      containers:\\n        - name: app\\n          image: nginx:latest\\n          securityContext:\\n            privileged: true\\n\"}}'\n+\n+\n+### Without credentials\n+\n+bash\n+curl -s -o /dev/null -w \"%{http_code}\\n\" http://localhost:8000/api/toolbox/tools\n+# 401\n+\n+\n+## Reference\n+\n+### Endpoints\n+\n+| Method | Path | Auth | Description |\n+|--------|------|------|-------------|\n+| GET | `/api/toolbox/tools` | Basic | Catalog: `id`, `description`, `version`, `input_schema` (JSON Schema) per tool. |\n+| POST | `/api/toolbox/runs` | Basic | Run one tool synchronously; returns HTTP 200 with the result and a `run_id`. |\n+\n+The prefix is `/api/toolbox`, matching the repository's flat convention\n+(`/api/debug`, `/api/mgmt`), not the literal `/api/v1/toolbox` of the change\n+request.\n+\n+### HTTP status codes\n+\n+| Status | Meaning | Body |\n+|--------|---------|------|\n+| 200 | Run completed (findings may still be present) | `ToolRunResponse` |\n+| 401 | Missing/invalid Basic Auth | FastAPI/`app.auth` envelope |\n+| 404 | Unknown tool id | `{\"error\": \"Unknown tool\", \"detail\": \"<id>\"}` |\n+| 413 | A configured limit was exceeded | `{\"error\": \"Input exceeds limit\", \"detail\": \"<limit>: <observed> > <maximum>\"}` |\n+| 422 | Body malformed, or payload does not match the tool input schema | FastAPI validation envelope, or `{\"error\": \"Invalid tool input\", \"detail\": [...]}` |\n+| 500 | Unexpected internal error | `{\"error\": \"Internal server error\", \"detail\": \"run_id=<uuid>\"}` |\n+| 504 | Run exceeded `TOOLBOX_RUN_TIMEOUT_SECONDS` | `{\"error\": \"Tool run timed out\", \"detail\": \"timeout_seconds: <n>\"}` |\n+\n+404/413/504 are returned as explicit `JSONResponse` objects rather than raised, so\n+the app-wide 400/404 handlers cannot collapse them into the generic\n+`{\"error\": \"Bad request\"}` / `{\"error\": \"Not found\"}` envelopes.\n+\n+### Configuration and limits\n+\n+All limits are env-driven (`app/config/settings.py`) and documented in\n+`.env.example`. Exceeding a limit is a controlled 413 that names the limit; inputs\n+are **never silently truncated**.\n+\n+| Variable | Default | Applies to |\n+|----------|---------|------------|\n+| `TOOLBOX_MAX_INPUT_BYTES` | 262144 | `json.validate` (text), `text.diff` (left+right), `k8s.manifest.inspect` (manifest) |\n+| `TOOLBOX_MAX_YAML_DOCUMENTS` | 50 | `k8s.manifest.inspect` |\n+| `TOOLBOX_MAX_YAML_DEPTH` | 50 | `k8s.manifest.inspect` (enforced during composition and on the composed graph) |\n+| `TOOLBOX_MAX_YAML_ALIASES` | 100 | `k8s.manifest.inspect` (anchor/alias expansion budget) |\n+| `TOOLBOX_MAX_FINDINGS` | 500 | all tools |\n+| `TOOLBOX_MAX_DIFF_CONTEXT_LINES` | 10 | `text.diff` (`context_lines`; the published schema also caps it at 50) |\n+| `TOOLBOX_RUN_TIMEOUT_SECONDS` | 10 | all tools (wall-clock timeout of the worker-thread run) |\n+\n+#### `text.diff` `context_lines`: published schema vs effective limit\n+\n+The catalog publishes the tool's JSON Schema, which caps `context_lines` at 50\n+(`MAX_CONTEXT_LINES` in `app/toolbox/tools/text_diff.py`). The **effective**\n+maximum is the configured `TOOLBOX_MAX_DIFF_CONTEXT_LINES` (default 10), enforced\n+at run time. A value that is valid per the published schema but above the\n+configured limit \u2014 for example `context_lines: 20` with the default configuration\n+\u2014 is rejected with HTTP 413 naming `max_diff_context_lines`; it is **not**\n+silently clamped. Raise `TOOLBOX_MAX_DIFF_CONTEXT_LINES` (up to 50) if a larger\n+context is needed.\n+\n+### Finding codes\n+\n+`json.validate`\n+\n+| Code | Severity | Category |\n+|------|----------|----------|\n+| `JSON_EMPTY_INPUT` | error | informational |\n+| `JSON_INVALID_SYNTAX` | error | informational |\n+\n+`text.diff`\n+\n+| Code | Severity | Category |\n+|------|----------|----------|\n+| `TEXT_DIFF_DIFFERENT` | info | informational |\n+\n+`k8s.manifest.inspect`\n+\n+| Code | Severity | Category |\n+|------|----------|----------|\n+| `K8S_MISSING_RESOURCE_REQUESTS` | warning | missing_configuration |\n+| `K8S_MISSING_RESOURCE_LIMITS` | warning | missing_configuration |\n+| `K8S_MISSING_READINESS_PROBE` | warning | missing_configuration |\n+| `K8S_MISSING_LIVENESS_PROBE` | warning | missing_configuration |\n+| `K8S_IMAGE_MISSING` | warning | missing_configuration |\n+| `K8S_IMAGE_NO_TAG` | warning | risky_configuration |\n+| `K8S_IMAGE_LATEST_TAG` | warning | risky_configuration |\n+| `K8S_PRIVILEGED_CONTAINER` | error | risky_configuration |\n+| `K8S_ALLOW_PRIVILEGE_ESCALATION_ENABLED` | error | risky_configuration |\n+| `K8S_ALLOW_PRIVILEGE_ESCALATION_NOT_DISABLED` | warning | missing_configuration |\n+| `K8S_RUN_AS_ROOT_ALLOWED` | error | risky_configuration |\n+| `K8S_RUN_AS_NON_ROOT_NOT_REQUIRED` | warning | missing_configuration |\n+| `K8S_MISSING_POD_SPEC` | warning | missing_configuration |\n+| `K8S_NO_CONTAINERS` | warning | missing_configuration |\n+| `K8S_DOCUMENT_NOT_MAPPING` | warning | informational |\n+| `K8S_CONTAINER_NOT_MAPPING` | warning | informational |\n+| `K8S_UNSUPPORTED_KIND` | info | informational |\n+| `K8S_INVALID_YAML` | error | informational |\n+\n+Router-level\n+\n+| Code | Severity | Category |\n+|------|----------|----------|\n+| `TOOL_INPUT_ERROR` | error | informational |\n+\n+`missing_configuration` means a setting is absent; `risky_configuration` means a\n+setting is present and explicitly unsafe. The two are never conflated.\n+\n+## How-to \u2014 adding a new tool\n+\n+1. Create `app/toolbox/tools/<name>.py` with:\n+   - a Pydantic `BaseModel` describing the tool input (this becomes the published\n+     `input_schema`);\n+   - a class exposing `id`, `version`, `description`, `input_model` and\n+     `run(payload, limits) -> ToolResult`.\n+   The module must not import FastAPI.\n+2. Register the instance in `app/toolbox/registry.py` by adding it to the tuple\n+   iterated at import time. Identifiers must be unique; a duplicate fails fast at\n+   import.\n+3. Add unit tests under `tests/` (valid, invalid, empty, limits, deterministic\n+   output) and, if the tool is reachable through the API, an API test.\n+4. Document the tool and its finding codes in this file.\n+\n+## Limitations of the Kubernetes checks\n+\n+`k8s.manifest.inspect` is a **heuristic static check over the manifest text that\n+was supplied**. It is **neither a complete Kubernetes validation nor a security\n+certification**. Specifically:\n+\n+- No API server, admission controller, policy engine or cluster state is\n+  consulted; the tool never makes a network call.\n+- Only `Deployment`, `StatefulSet` and `DaemonSet` are inspected. Other kinds\n+  produce an informational `K8S_UNSUPPORTED_KIND` finding and are skipped.\n+- The checks are syntactic: they look for the presence/absence of fields, not for\n+  whether the values are semantically valid for a given cluster version.\n+- `runAsNonRoot` is evaluated at container level first, then pod level; other\n+  non-root mechanisms (for example a non-zero `runAsUser` without\n+  `runAsNonRoot: true`) are not treated as satisfying the check.\n+- Init containers are inspected for resources, image and securityContext, but\n+  probe checks are not applied to them (they run to completion).\n+- The tool does not detect every risky configuration; a clean result is not proof\n+  that a manifest is safe.\n+\n+## Architecture note\n+\n+- **Layout.** `app/toolbox/base.py` holds the pure-Python contracts (a `Tool`\n+  `Protocol`, a frozen `ToolLimits` dataclass, `Finding`/`ToolResult` dataclasses,\n+  `ToolInputError`/`ToolLimitExceeded`). `app/toolbox/registry.py` is an explicit\n+  import-time registry. `app/toolbox/tools/*.py` are the implementations.\n+  `app/models/toolbox.py` is the wire contract. `app/routers/toolbox.py` is a thin\n+  HTTP layer. Analysis functions never import FastAPI and are unit-testable in\n+  isolation.\n+- **Execution model.** CPU-bound parsing is dispatched with\n+  `loop.run_in_executor`, the same pattern `/api/fib/{x}` already uses, wrapped in\n+  `asyncio.wait_for` with a configurable timeout, so the event loop is not blocked.\n+- **YAML safety.** Parsing uses a `yaml.SafeLoader` subclass that enforces a\n+  composition-depth budget and an alias/anchor budget *during* composition, plus a\n+  cycle-aware depth walk over the composed graph. No arbitrary object is ever\n+  constructed.\n+- **Observability.** The existing loguru setup is reused; the run emits one\n+  structured line with `run_id`, `tool`, `status`, `outcome` and `duration_ms` and\n+  never logs payloads, manifests, diffs or secrets. Tracing and metrics reuse the\n+  existing OpenTelemetry and prometheus-fastapi-instrumentator wiring; no parallel\n+  stack and no new metric families are added, and `run_id`/payload/resource names\n+  are never used as metric labels.\n+\n+### Alternatives ruled out\n+\n+- **A separate service or a queue.** The checks are local, bounded and\n+  synchronous; a broker or worker would add infrastructure with no demonstrable\n+  need.\n+- **A plugin system with dynamic imports.** The registry is explicit and fixed at\n+  import time; client input never selects code to import or execute.\n+- **Persisting runs / `GET /runs/{id}`.** There is no real persistence system for\n+  runs, and an in-memory store pretending to be durable was rejected. `run_id` is\n+  correlation-only.\n+- **A URL/path heuristic in `json.validate`.** The input schema has a single\n+  free-text field, so nothing is dereferenced; the tool parses the string as-is.\ndiff --git a/docs/README.md b/docs/README.md\nindex 84d9f3a..c09223a 100644\n--- a/docs/README.md\n+++ b/docs/README.md\n@@ -20,6 +20,7 @@ C4 Model compliant, OWASP-reviewed, PCI-DSS/GDPR annotated.\n | 11 | [MCP Server](11-mcp-server.md) | Developers, LLM tool integrators | In-process MCP server at /api/mcp \u2014 why FastMCP + FastAPI, auth, tools, usage |\n | 13 | [Agent Pipeline](13-agent-pipeline.md) | DevOps, Developers | The current pipeline: every pull request reviewed by roles, repaired, certified and merged with no person; how a change ends; the canary and the health check |\n | 12 | [AI Pipeline](12-ai-pipeline.md) | DevOps, Developers | PR gate, Renovate auto-merge + self-repair, review/triage/release-notes, powered by [ci-shared](https://github.com/lorenzogirardi/ci-shared) |\n+| 14 | [Dev/SRE Toolbox](14-dev-sre-toolbox.md) | Developers, SRE, Security | Modular, synchronous, read-only utility catalog at /api/toolbox \u2014 result contract, limits, finding codes, how to add a tool, Kubernetes check limitations |\n \n ## How to View\n \ndiff --git a/requirements.txt b/requirements.txt\nindex 32ec1cb..c0e7170 100644\n--- a/requirements.txt\n+++ b/requirements.txt\n@@ -21,6 +21,9 @@ python-multipart==0.0.32\n # Templating\n jinja2==3.1.6\n \n+# YAML (Dev/SRE Toolbox: k8s.manifest.inspect, safe loader only)\n+PyYAML==6.0.3\n+\n # Observability\n loguru==0.7.3\n prometheus-fastapi-instrumentator==8.1.0\ndiff --git a/tests/test_toolbox_api.py b/tests/test_toolbox_api.py\nnew file mode 100644\nindex 0000000..9f6797c\n--- /dev/null\n+++ b/tests/test_toolbox_api.py\n@@ -0,0 +1,169 @@\n+\"\"\"API tests for the Dev/SRE Toolbox endpoints.\"\"\"\n+\n+import pytest\n+\n+from app.toolbox.base import ToolLimits\n+from app.toolbox.tools.json_validate import JsonValidateInput\n+\n+\n+@pytest.mark.anyio\n+async def test_catalog_requires_auth(client):\n+    resp = await client.get(\"/api/toolbox/tools\")\n+    assert resp.status_code == 401\n+\n+\n+@pytest.mark.anyio\n+async def test_catalog(client, auth_headers):\n+    resp = await client.get(\"/api/toolbox/tools\", headers=auth_headers)\n+    assert resp.status_code == 200\n+    body = resp.json()\n+    ids = {t[\"id\"] for t in body[\"tools\"]}\n+    assert ids == {\"json.validate\", \"text.diff\", \"k8s.manifest.inspect\"}\n+    for entry in body[\"tools\"]:\n+        assert entry[\"version\"]\n+        assert entry[\"description\"]\n+        assert entry[\"input_schema\"][\"type\"] == \"object\"\n+\n+\n+@pytest.mark.anyio\n+async def test_valid_run(client, auth_headers):\n+    resp = await client.post(\n+        \"/api/toolbox/runs\",\n+        headers=auth_headers,\n+        json={\"tool\": \"json.validate\", \"input\": {\"text\": '{\"a\": 1}'}},\n+    )\n+    assert resp.status_code == 200\n+    body = resp.json()\n+    assert body[\"tool\"] == \"json.validate\"\n+    assert body[\"status\"] == \"completed\"\n+    assert body[\"outcome\"] == \"pass\"\n+    assert body[\"summary\"] == {\"info\": 0, \"warning\": 0, \"error\": 0}\n+    assert body[\"output\"][\"value\"] == {\"a\": 1}\n+    assert body[\"run_id\"]\n+\n+\n+@pytest.mark.anyio\n+async def test_invalid_json_is_not_an_http_error(client, auth_headers):\n+    resp = await client.post(\n+        \"/api/toolbox/runs\",\n+        headers=auth_headers,\n+        json={\"tool\": \"json.validate\", \"input\": {\"text\": \"{\"}},\n+    )\n+    assert resp.status_code == 200\n+    body = resp.json()\n+    assert body[\"outcome\"] == \"fail\"\n+    assert body[\"findings\"][0][\"code\"] == \"JSON_INVALID_SYNTAX\"\n+\n+\n+@pytest.mark.anyio\n+async def test_unknown_tool(client, auth_headers):\n+    resp = await client.post(\n+        \"/api/toolbox/runs\",\n+        headers=auth_headers,\n+        json={\"tool\": \"nope\", \"input\": {}},\n+    )\n+    assert resp.status_code == 404\n+    assert resp.json()[\"error\"] == \"Unknown tool\"\n+\n+\n+@pytest.mark.anyio\n+async def test_malformed_request(client, auth_headers):\n+    resp = await client.post(\"/api/toolbox/runs\", headers=auth_headers, json={\"input\": {}})\n+    assert resp.status_code == 422\n+\n+\n+@pytest.mark.anyio\n+async def test_tool_input_schema_mismatch(client, auth_headers):\n+    resp = await client.post(\n+        \"/api/toolbox/runs\",\n+        headers=auth_headers,\n+        json={\"tool\": \"json.validate\", \"input\": {\"wrong\": 1}},\n+    )\n+    assert resp.status_code == 422\n+    assert resp.json()[\"error\"] == \"Invalid tool input\"\n+\n+\n+@pytest.mark.anyio\n+async def test_limit_exceeded(client, auth_headers, monkeypatch):\n+    import app.routers.toolbox as tb\n+\n+    monkeypatch.setattr(\n+        tb,\n+        \"_effective_limits\",\n+        lambda: ToolLimits(\n+            max_input_bytes=5,\n+            max_yaml_documents=10,\n+            max_yaml_depth=20,\n+            max_yaml_aliases=10,\n+            max_findings=100,\n+            max_diff_context_lines=10,\n+        ),\n+    )\n+    resp = await client.post(\n+        \"/api/toolbox/runs\",\n+        headers=auth_headers,\n+        json={\"tool\": \"json.validate\", \"input\": {\"text\": '{\"a\": 1}'}},\n+    )\n+    assert resp.status_code == 413\n+    assert \"max_input_bytes\" in resp.json()[\"detail\"]\n+\n+\n+@pytest.mark.anyio\n+async def test_internal_error_is_sanitized(client, auth_headers, monkeypatch):\n+    import app.routers.toolbox as tb\n+\n+    class Boom:\n+        id = \"boom\"\n+        version = \"1.0.0\"\n+        description = \"boom\"\n+        input_model = JsonValidateInput\n+\n+        def run(self, payload, limits):\n+            raise RuntimeError(\"secret internal detail\")\n+\n+    monkeypatch.setattr(tb, \"get_tool\", lambda tool_id: Boom())\n+    resp = await client.post(\n+        \"/api/toolbox/runs\",\n+        headers=auth_headers,\n+        json={\"tool\": \"boom\", \"input\": {\"text\": \"{}\"}},\n+    )\n+    assert resp.status_code == 500\n+    assert resp.json()[\"error\"] == \"Internal server error\"\n+    assert \"secret internal detail\" not in resp.text\n+\n+\n+@pytest.mark.anyio\n+async def test_k8s_run_end_to_end(client, auth_headers):\n+    manifest = \"\"\"\n+apiVersion: apps/v1\n+kind: Deployment\n+metadata:\n+  name: example\n+spec:\n+  template:\n+    spec:\n+      containers:\n+        - name: app\n+          image: nginx:latest\n+          securityContext:\n+            privileged: true\n+\"\"\"\n+    resp = await client.post(\n+        \"/api/toolbox/runs\",\n+        headers=auth_headers,\n+        json={\"tool\": \"k8s.manifest.inspect\", \"input\": {\"manifest\": manifest}},\n+    )\n+    assert resp.status_code == 200\n+    body = resp.json()\n+    assert body[\"outcome\"] == \"fail\"\n+    codes = {f[\"code\"] for f in body[\"findings\"]}\n+    assert \"K8S_PRIVILEGED_CONTAINER\" in codes\n+    assert \"K8S_IMAGE_LATEST_TAG\" in codes\n+    assert body[\"summary\"][\"error\"] >= 1\n+\n+\n+@pytest.mark.anyio\n+async def test_existing_endpoints_still_work(client):\n+    resp = await client.get(\"/api/fib/10\")\n+    assert resp.status_code == 200\n+    assert resp.json()[\"result\"] == \"55\"\ndiff --git a/tests/test_toolbox_json_validate.py b/tests/test_toolbox_json_validate.py\nnew file mode 100644\nindex 0000000..7aefb3f\n--- /dev/null\n+++ b/tests/test_toolbox_json_validate.py\n@@ -0,0 +1,68 @@\n+\"\"\"Unit tests for the json.validate tool.\"\"\"\n+\n+import pytest\n+\n+from app.toolbox.base import ToolLimitExceeded, ToolLimits\n+from app.toolbox.tools.json_validate import JsonValidateInput, JsonValidateTool\n+\n+LIMITS = ToolLimits(\n+    max_input_bytes=10000,\n+    max_yaml_documents=10,\n+    max_yaml_depth=20,\n+    max_yaml_aliases=10,\n+    max_findings=100,\n+    max_diff_context_lines=10,\n+)\n+\n+\n+def _run(text, limits=LIMITS):\n+    return JsonValidateTool().run(JsonValidateInput(text=text), limits)\n+\n+\n+def test_valid_object():\n+    result = _run('{\"a\": 1, \"b\": [true, null]}')\n+    assert result.findings == []\n+    assert result.output[\"valid\"] is True\n+    assert result.output[\"value\"] == {\"a\": 1, \"b\": [True, None]}\n+\n+\n+def test_valid_scalar():\n+    result = _run(\"42\")\n+    assert result.output == {\"valid\": True, \"value\": 42}\n+\n+\n+def test_invalid_syntax_reports_position():\n+    result = _run('{\"a\": }')\n+    assert result.output[\"valid\"] is False\n+    assert len(result.findings) == 1\n+    finding = result.findings[0]\n+    assert finding.code == \"JSON_INVALID_SYNTAX\"\n+    assert finding.severity == \"error\"\n+    assert \"line\" in finding.location[\"path\"]\n+\n+\n+def test_empty_input():\n+    result = _run(\"   \")\n+    assert result.output[\"valid\"] is False\n+    assert result.findings[0].code == \"JSON_EMPTY_INPUT\"\n+\n+\n+def test_size_limit():\n+    limits = ToolLimits(\n+        max_input_bytes=5,\n+        max_yaml_documents=10,\n+        max_yaml_depth=20,\n+        max_yaml_aliases=10,\n+        max_findings=100,\n+        max_diff_context_lines=10,\n+    )\n+    with pytest.raises(ToolLimitExceeded) as exc:\n+        _run('{\"a\": 1}', limits)\n+    assert exc.value.limit == \"max_input_bytes\"\n+\n+\n+def test_deterministic_output():\n+    first = _run('{\"a\": 1}')\n+    second = _run('{\"a\": 1}')\n+    assert first.output == second.output\n+    assert first.findings == second.findings\ndiff --git a/tests/test_toolbox_k8s.py b/tests/test_toolbox_k8s.py\nnew file mode 100644\nindex 0000000..fb02ef3\n--- /dev/null\n+++ b/tests/test_toolbox_k8s.py\n@@ -0,0 +1,323 @@\n+\"\"\"Unit tests for the k8s.manifest.inspect tool.\n+\n+These tests exercise the pure analysis function directly (no FastAPI, no HTTP).\n+The tool is heuristic and offline: it never contacts a cluster.\n+\"\"\"\n+\n+import pytest\n+\n+from app.toolbox.base import ToolLimitExceeded, ToolLimits\n+from app.toolbox.tools.k8s_manifest import K8sManifestInspectTool, K8sManifestInput\n+\n+\n+def _limits(**overrides) -> ToolLimits:\n+    base = dict(\n+        max_input_bytes=200000,\n+        max_yaml_documents=50,\n+        max_yaml_depth=30,\n+        max_yaml_aliases=50,\n+        max_findings=500,\n+        max_diff_context_lines=10,\n+    )\n+    base.update(overrides)\n+    return ToolLimits(**base)\n+\n+\n+def _run(manifest: str, **overrides):\n+    tool = K8sManifestInspectTool()\n+    return tool.run(K8sManifestInput(manifest=manifest), _limits(**overrides))\n+\n+\n+def _codes(result) -> list[str]:\n+    return [f.code for f in result.findings]\n+\n+\n+DEPLOYMENT = (\n+    \"apiVersion: apps/v1\\n\"\n+    \"kind: Deployment\\n\"\n+    \"metadata:\\n\"\n+    \"  name: example\\n\"\n+    \"spec:\\n\"\n+    \"  template:\\n\"\n+    \"    spec:\\n\"\n+    \"      containers:\\n\"\n+    \"      - name: app\\n\"\n+    \"        image: nginx:1.25\\n\"\n+)\n+\n+\n+def _deployment_with(container_extra: str = \"\", pod_extra: str = \"\", init: str = \"\") -> str:\n+    return (\n+        \"apiVersion: apps/v1\\n\"\n+        \"kind: Deployment\\n\"\n+        \"metadata:\\n\"\n+        \"  name: example\\n\"\n+        \"spec:\\n\"\n+        \"  template:\\n\"\n+        \"    spec:\\n\"\n+        + pod_extra\n+        + \"      containers:\\n\"\n+        \"      - name: app\\n\"\n+        \"        image: nginx:1.25\\n\"\n+        + container_extra\n+        + init\n+    )\n+\n+\n+# --- structure -------------------------------------------------------------\n+\n+\n+def test_multi_document_manifest():\n+    manifest = DEPLOYMENT + \"---\\n\" + DEPLOYMENT.replace(\"Deployment\", \"StatefulSet\")\n+    result = _run(manifest)\n+    assert result.output[\"documents\"] == 2\n+    assert result.output[\"containers_checked\"] == 2\n+\n+\n+def test_empty_documents_are_counted():\n+    result = _run(\"---\\n---\\n\")\n+    assert result.output[\"empty_documents\"] >= 1\n+\n+\n+def test_unsupported_kind_is_informational():\n+    manifest = \"apiVersion: v1\\nkind: Service\\nmetadata:\\n  name: svc\\n\"\n+    result = _run(manifest)\n+    assert \"K8S_UNSUPPORTED_KIND\" in _codes(result)\n+    finding = next(f for f in result.findings if f.code == \"K8S_UNSUPPORTED_KIND\")\n+    assert finding.severity == \"info\"\n+\n+\n+def test_document_not_mapping():\n+    result = _run(\"- just\\n- a\\n- list\\n\")\n+    assert \"K8S_DOCUMENT_NOT_MAPPING\" in _codes(result)\n+\n+\n+def test_missing_pod_spec():\n+    manifest = \"apiVersion: apps/v1\\nkind: Deployment\\nmetadata:\\n  name: d\\nspec: {}\\n\"\n+    result = _run(manifest)\n+    assert \"K8S_MISSING_POD_SPEC\" in _codes(result)\n+\n+\n+def test_no_containers():\n+    manifest = (\n+        \"apiVersion: apps/v1\\nkind: Deployment\\nmetadata:\\n  name: d\\n\"\n+        \"spec:\\n  template:\\n    spec:\\n      containers: []\\n\"\n+    )\n+    result = _run(manifest)\n+    assert \"K8S_NO_CONTAINERS\" in _codes(result)\n+\n+\n+def test_statefulset_and_daemonset_supported():\n+    for kind in (\"StatefulSet\", \"DaemonSet\"):\n+        manifest = DEPLOYMENT.replace(\"Deployment\", kind)\n+        result = _run(manifest)\n+        assert result.output[\"containers_checked\"] == 1\n+\n+\n+# --- resources -------------------------------------------------------------\n+\n+\n+def test_missing_resources():\n+    result = _run(DEPLOYMENT)\n+    assert \"K8S_MISSING_RESOURCE_REQUESTS\" in _codes(result)\n+    assert \"K8S_MISSING_RESOURCE_LIMITS\" in _codes(result)\n+\n+\n+def test_resources_present_are_not_reported():\n+    extra = (\n+        \"        resources:\\n\"\n+        \"          requests:\\n            cpu: 100m\\n            memory: 64Mi\\n\"\n+        \"          limits:\\n            cpu: 200m\\n            memory: 128Mi\\n\"\n+    )\n+    result = _run(_deployment_with(container_extra=extra))\n+    assert \"K8S_MISSING_RESOURCE_REQUESTS\" not in _codes(result)\n+    assert \"K8S_MISSING_RESOURCE_LIMITS\" not in _codes(result)\n+\n+\n+# --- probes ----------------------------------------------------------------\n+\n+\n+def test_missing_probes():\n+    result = _run(DEPLOYMENT)\n+    assert \"K8S_MISSING_READINESS_PROBE\" in _codes(result)\n+    assert \"K8S_MISSING_LIVENESS_PROBE\" in _codes(result)\n+\n+\n+def test_init_container_has_no_probe_findings():\n+    init = (\n+        \"      initContainers:\\n\"\n+        \"      - name: init\\n\"\n+        \"        image: busybox:1.36\\n\"\n+    )\n+    result = _run(_deployment_with(init=init))\n+    init_findings = [\n+        f for f in result.findings if \"initContainers\" in (f.location.get(\"path\") or \"\")\n+    ]\n+    assert init_findings, \"init container should still be inspected\"\n+    assert not any(\n+        f.code in (\"K8S_MISSING_READINESS_PROBE\", \"K8S_MISSING_LIVENESS_PROBE\")\n+        for f in init_findings\n+    )\n+\n+\n+# --- images ----------------------------------------------------------------\n+\n+\n+def test_image_without_tag():\n+    manifest = DEPLOYMENT.replace(\"nginx:1.25\", \"nginx\")\n+    result = _run(manifest)\n+    assert \"K8S_IMAGE_NO_TAG\" in _codes(result)\n+\n+\n+def test_image_latest_tag():\n+    manifest = DEPLOYMENT.replace(\"nginx:1.25\", \"nginx:latest\")\n+    result = _run(manifest)\n+    assert \"K8S_IMAGE_LATEST_TAG\" in _codes(result)\n+\n+\n+def test_image_with_tag_is_clean():\n+    result = _run(DEPLOYMENT)\n+    assert \"K8S_IMAGE_NO_TAG\" not in _codes(result)\n+    assert \"K8S_IMAGE_LATEST_TAG\" not in _codes(result)\n+\n+\n+def test_image_by_digest_is_clean():\n+    manifest = DEPLOYMENT.replace(\n+        \"nginx:1.25\", \"nginx@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\"\n+    )\n+    result = _run(manifest)\n+    assert \"K8S_IMAGE_NO_TAG\" not in _codes(result)\n+    assert \"K8S_IMAGE_LATEST_TAG\" not in _codes(result)\n+\n+\n+# --- securityContext -------------------------------------------------------\n+\n+\n+def test_privileged_container_is_error():\n+    extra = \"        securityContext:\\n          privileged: true\\n\"\n+    result = _run(_deployment_with(container_extra=extra))\n+    assert \"K8S_PRIVILEGED_CONTAINER\" in _codes(result)\n+    finding = next(f for f in result.findings if f.code == \"K8S_PRIVILEGED_CONTAINER\")\n+    assert finding.severity == \"error\"\n+    assert finding.category == \"risky_configuration\"\n+\n+\n+def test_allow_privilege_escalation_not_disabled():\n+    result = _run(DEPLOYMENT)\n+    assert \"K8S_ALLOW_PRIVILEGE_ESCALATION_NOT_DISABLED\" in _codes(result)\n+\n+\n+def test_allow_privilege_escalation_enabled_is_error():\n+    extra = \"        securityContext:\\n          allowPrivilegeEscalation: true\\n\"\n+    result = _run(_deployment_with(container_extra=extra))\n+    assert \"K8S_ALLOW_PRIVILEGE_ESCALATION_ENABLED\" in _codes(result)\n+\n+\n+def test_allow_privilege_escalation_false_is_clean():\n+    extra = \"        securityContext:\\n          allowPrivilegeEscalation: false\\n\"\n+    result = _run(_deployment_with(container_extra=extra))\n+    assert \"K8S_ALLOW_PRIVILEGE_ESCALATION_NOT_DISABLED\" not in _codes(result)\n+    assert \"K8S_ALLOW_PRIVILEGE_ESCALATION_ENABLED\" not in _codes(result)\n+\n+\n+def test_pod_level_run_as_non_root_satisfies_container():\n+    pod_extra = \"      securityContext:\\n        runAsNonRoot: true\\n\"\n+    result = _run(_deployment_with(pod_extra=pod_extra))\n+    assert \"K8S_RUN_AS_NON_ROOT_NOT_REQUIRED\" not in _codes(result)\n+\n+\n+def test_run_as_root_allowed_is_error():\n+    extra = \"        securityContext:\\n          runAsNonRoot: false\\n\"\n+    result = _run(_deployment_with(container_extra=extra))\n+    assert \"K8S_RUN_AS_ROOT_ALLOWED\" in _codes(result)\n+\n+\n+def test_non_root_not_required_is_warning():\n+    result = _run(DEPLOYMENT)\n+    assert \"K8S_RUN_AS_NON_ROOT_NOT_REQUIRED\" in _codes(result)\n+    finding = next(f for f in result.findings if f.code == \"K8S_RUN_AS_NON_ROOT_NOT_REQUIRED\")\n+    assert finding.severity == \"warning\"\n+    assert finding.category == \"missing_configuration\"\n+\n+\n+# --- YAML safety -----------------------------------------------------------\n+\n+\n+def test_invalid_yaml_is_reported():\n+    result = _run(\"kind: [unclosed\\n\")\n+    assert \"K8S_INVALID_YAML\" in _codes(result)\n+\n+\n+def test_unsafe_yaml_tag_is_rejected():\n+    manifest = \"!!python/object/apply:os.system ['echo hi']\\n\"\n+    result = _run(manifest)\n+    assert \"K8S_INVALID_YAML\" in _codes(result)\n+\n+\n+def test_alias_budget_is_enforced():\n+    manifest = (\n+        \"a: &a [x, x, x, x, x, x, x, x, x]\\n\"\n+        \"b: &b [*a, *a, *a, *a, *a, *a, *a, *a, *a]\\n\"\n+        \"c: &c [*b, *b, *b, *b, *b, *b, *b, *b, *b]\\n\"\n+        \"d: [*c, *c, *c, *c, *c, *c, *c, *c, *c]\\n\"\n+    )\n+    with pytest.raises(ToolLimitExceeded) as exc:\n+        _run(manifest, max_yaml_aliases=5)\n+    assert exc.value.limit == \"max_yaml_aliases\"\n+\n+\n+def test_depth_budget_is_enforced():\n+    manifest = \"a: \" + \"[\" * 100 + \"]\" * 100 + \"\\n\"\n+    with pytest.raises(ToolLimitExceeded) as exc:\n+        _run(manifest, max_yaml_depth=10)\n+    assert exc.value.limit == \"max_yaml_depth\"\n+\n+\n+# --- limits ----------------------------------------------------------------\n+\n+\n+def test_input_size_budget_is_enforced():\n+    manifest = \"kind: Service\\n\" + \"# pad\\n\" * 1000\n+    with pytest.raises(ToolLimitExceeded) as exc:\n+        _run(manifest, max_input_bytes=10)\n+    assert exc.value.limit == \"max_input_bytes\"\n+\n+\n+def test_document_budget_is_enforced():\n+    manifest = \"\\n---\\n\".join([\"kind: Service\"] * 5)\n+    with pytest.raises(ToolLimitExceeded) as exc:\n+        _run(manifest, max_yaml_documents=2)\n+    assert exc.value.limit == \"max_yaml_documents\"\n+\n+\n+def test_findings_budget_is_enforced():\n+    containers = \"\\n\".join(\n+        f\"      - name: c{i}\\n        image: nginx\" for i in range(20)\n+    )\n+    manifest = (\n+        \"apiVersion: apps/v1\\nkind: Deployment\\nmetadata:\\n  name: d\\n\"\n+        \"spec:\\n  template:\\n    spec:\\n      containers:\\n\" + containers + \"\\n\"\n+    )\n+    with pytest.raises(ToolLimitExceeded) as exc:\n+        _run(manifest, max_findings=5)\n+    assert exc.value.limit == \"max_findings\"\n+\n+\n+# --- determinism / honesty -------------------------------------------------\n+\n+\n+def test_output_is_deterministic():\n+    manifest = _deployment_with(\n+        container_extra=\"        securityContext:\\n          privileged: true\\n\"\n+    )\n+    first = _run(manifest)\n+    second = _run(manifest)\n+    assert _codes(first) == _codes(second)\n+    assert first.output == second.output\n+\n+\n+def test_disclaimer_is_present():\n+    result = _run(\"kind: Service\\n\")\n+    disclaimer = result.output[\"disclaimer\"].lower()\n+    assert \"neither\" in disclaimer\n+    assert \"certification\" in disclaimer\ndiff --git a/tests/test_toolbox_text_diff.py b/tests/test_toolbox_text_diff.py\nnew file mode 100644\nindex 0000000..96aa0a4\n--- /dev/null\n+++ b/tests/test_toolbox_text_diff.py\n@@ -0,0 +1,61 @@\n+\"\"\"Unit tests for the text.diff tool.\"\"\"\n+\n+import pytest\n+from pydantic import ValidationError\n+\n+from app.toolbox.base import ToolLimitExceeded, ToolLimits\n+from app.toolbox.tools.text_diff import TextDiffInput, TextDiffTool\n+\n+LIMITS = ToolLimits(\n+    max_input_bytes=10000,\n+    max_yaml_documents=10,\n+    max_yaml_depth=20,\n+    max_yaml_aliases=10,\n+    max_findings=100,\n+    max_diff_context_lines=10,\n+)\n+\n+\n+def _run(left, right, context_lines=3, limits=LIMITS):\n+    return TextDiffTool().run(\n+        TextDiffInput(left=left, right=right, context_lines=context_lines), limits\n+    )\n+\n+\n+def test_identical_inputs():\n+    result = _run(\"a\\nb\\n\", \"a\\nb\\n\")\n+    assert result.output[\"identical\"] is True\n+    assert result.output[\"diff\"] == \"\"\n+    assert result.findings == []\n+\n+\n+def test_different_inputs():\n+    result = _run(\"a\\nb\\n\", \"a\\nc\\n\")\n+    assert result.output[\"identical\"] is False\n+    assert \"-b\" in result.output[\"diff\"]\n+    assert \"+c\" in result.output[\"diff\"]\n+    assert result.findings[0].code == \"TEXT_DIFF_DIFFERENT\"\n+    assert result.findings[0].severity == \"info\"\n+\n+\n+def test_empty_strings():\n+    result = _run(\"\", \"\")\n+    assert result.output[\"identical\"] is True\n+\n+\n+def test_context_lines_limit():\n+    with pytest.raises(ToolLimitExceeded) as exc:\n+        _run(\"a\\n\", \"b\\n\", context_lines=11)\n+    assert exc.value.limit == \"max_diff_context_lines\"\n+\n+\n+def test_context_lines_schema_bound():\n+    with pytest.raises(ValidationError):\n+        TextDiffInput(left=\"a\", right=\"b\", context_lines=999)\n+\n+\n+def test_deterministic_output():\n+    first = _run(\"a\\nb\\n\", \"a\\nc\\n\")\n+    second = _run(\"a\\nb\\n\", \"a\\nc\\n\")\n+    assert first.output == second.output\n+    assert first.findings == second.findings\n",
+  "patch_truncated": false,
+  "report": {
+    "budget_used": {
+      "cost_usd": 1.351677,
+      "elapsed_seconds": 1630.026,
+      "llm_calls": 116,
+      "tokens": 6138373,
+      "tool_calls": 980
+    },
+    "change_levels": {
+      "deployed": false,
+      "integrated": false,
+      "verified": true
+    },
+    "decisions": {
+      "selection:r0": {
+        "meta": {
+          "evidence_refs": [],
+          "id": "sel-457af0a6445d3129",
+          "input_hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "phase": "selection",
+          "plan_version": 0,
+          "producer": "sys.platform",
+          "round": 0
+        },
+        "outcome": "revise",
+        "rationale": "no admissible proposal in round 0; bounded revision 1/1",
+        "selected_proposal_id": null,
+        "standings": [
+          {
+            "admissible": false,
+            "proposal_id": "prop-4c779ea4f01dc091",
+            "rank": null,
+            "reasons": [
+              "mandatory requirement not covered: req-9a66691b1b86b4b2",
+              "critical claim refuted: Platform policy protects .github/workflows/** as a protected path, so the CI pipeline cannot be modified by this change."
+            ],
+            "score": null
+          },
+          {
+            "admissible": false,
+            "proposal_id": "prop-a4f87e35bf03b7a5",
+            "rank": null,
+            "reasons": [
+              "critical claim refuted: The toolbox package base module exists after the change.",
+              "critical claim refuted: The explicit tool registry module exists after the change.",
+              "critical claim refuted: The json.validate tool module exists after the change.",
+              "critical claim refuted: The text.diff tool module exists after the change.",
+              "critical claim refuted: The k8s.manifest.inspect tool module exists after the change.",
+              "critical claim refuted: The toolbox Pydantic models module exists after the change.",
+              "critical claim refuted: The toolbox router module exists after the change.",
+              "critical claim refuted: The toolbox router uses the repository's flat /api prefix convention.",
+              "critical claim refuted: The toolbox router is gated by the existing Basic-Auth dependency.",
+              "critical claim refuted: The toolbox router is imported in the application factory.",
+              "critical claim refuted: The toolbox router is included in the application factory.",
+              "critical claim refuted: A YAML parser is declared as a dependency.",
+              "critical claim refuted: YAML is parsed only through the safe loader.",
+              "critical claim refuted: The privileged-container finding code is emitted.",
+              "critical claim refuted: Init containers are handled on a separate branch from regular containers.",
+              "critical claim refuted: The findings limit is configurable through Settings.",
+              "critical claim refuted: CPU-bound tool execution is offloaded from the event loop.",
+              "critical claim refuted: Unit tests for the tools exist.",
+              "critical claim refuted: API tests for the toolbox endpoints exist.",
+              "critical claim refuted: Kubernetes-specific tests exist.",
+              "critical claim refuted: The toolbox documentation page exists.",
+              "critical claim refuted: The new documentation is indexed in the docs index.",
+              "critical unknown unresolved: PyYAML is not installed in the current environment and must be added to requirements.txt; the exact pin will be chosen from a version available to the build at implementation time.",
+              "critical unknown unresolved: The app-wide 400 handler is registered for status code 400 and therefore collapses any HTTPException(400) body; limit violations must use a different status (413) to stay informative."
+            ],
+            "score": null
+          },
+          {
+            "admissible": false,
+            "proposal_id": "prop-e01963b9410d23d6",
+            "rank": null,
+            "reasons": [
+              "critical claim refuted: Planned new module app/toolbox/base.py (Tool protocol, ToolResult, ToolboxLimitError) will exist after implementation.",
+              "critical claim refuted: Planned new module app/toolbox/registry.py (explicit id -> Tool dict) will exist after implementation.",
+              "critical claim refuted: Planned new module app/toolbox/runner.py (run_in_executor dispatch) will exist after implementation.",
+              "critical claim refuted: Planned new tool module app/toolbox/tools/json_validate.py will exist after implementation.",
+              "critical claim refuted: Planned new tool module app/toolbox/tools/text_diff.py will exist after implementation.",
+              "critical claim refuted: Planned new tool module app/toolbox/tools/k8s_manifest.py will exist after implementation.",
+              "critical claim refuted: Planned new router app/routers/toolbox.py will exist after implementation.",
+              "critical claim refuted: Planned new test module tests/test_toolbox_k8s.py will exist after implementation.",
+              "critical claim unresolved: The toolbox routes require no network, no Kubernetes cluster and no external credentials; they operate only on the request body.",
+              "critical claim unresolved: No request payload, manifest, diff or secret is written to logs; only run_id, tool id, status, duration_ms and finding counts are logged."
+            ],
+            "score": null
+          }
+        ],
+        "tie_break_applied": ""
+      },
+      "selection:r1": {
+        "meta": {
+          "evidence_refs": [],
+          "id": "sel-555f66d42168830c",
+          "input_hash": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+          "phase": "selection",
+          "plan_version": 1,
+          "producer": "sys.platform",
+          "round": 1
+        },
+        "outcome": "selected",
+        "rationale": "selected prop-2e668f554d8554a3 by peer rubric among admissible proposals",
+        "selected_proposal_id": "prop-2e668f554d8554a3",
+        "standings": [
+          {
+            "admissible": true,
+            "proposal_id": "prop-2e668f554d8554a3",
+            "rank": 1,
+            "reasons": [],
+            "score": 4.6818
+          },
+          {
+            "admissible": true,
+            "proposal_id": "prop-4625b0e254ff31a5",
+            "rank": 2,
+            "reasons": [],
+            "score": 4.4091
+          },
+          {
+            "admissible": false,
+            "proposal_id": "prop-cfda3b8afd2a5616",
+            "rank": null,
+            "reasons": [
+              "critical claim unresolved: The toolbox routes require no network, no Kubernetes cluster and no external credentials; they operate only on the request body.",
+              "critical claim unresolved: No request payload, manifest, diff or secret is written to logs; only run_id, tool id, status, duration_ms and finding counts are logged."
+            ],
+            "score": null
+          }
+        ],
+        "tie_break_applied": ""
+      }
+    },
+    "environment_id": "codeinterpreter:magi_sandbox-whv8c9iEW8",
+    "findings": [
+      {
+        "category": "design",
+        "id": "fnd-001c806607647fc0",
+        "producer": "spec.qa",
+        "severity": "minor",
+        "status": "CONFIRMED",
+        "status_reason": "all supporting claims verified",
+        "subject_id": "prop-a4f87e35bf03b7a5",
+        "title": "Unknown tool returns the generic app-wide 404 envelope, losing the tool identifier"
+      },
+      {
+        "category": "documentation",
+        "id": "fnd-00804522804a44a0",
+        "producer": "dev.pair",
+        "severity": "minor",
+        "status": "CONFIRMED",
+        "status_reason": "all supporting claims verified",
+        "subject_id": "prop-2e668f554d8554a3",
+        "title": "text.diff published input_schema advertises context_lines up to 50 while the runtime limit defaults to 10"
+      },
+      {
+        "category": "design",
+        "id": "fnd-0250c737bd10e932",
+        "producer": "spec.qa",
+        "severity": "minor",
+        "status": "UNRESOLVED",
+        "status_reason": "supporting claims could not be verified",
+        "subject_id": "prop-2e668f554d8554a3",
+        "title": "outcome=fail for warning-only findings weakens the missing-vs-risky distinction"
+      },
+      {
+        "category": "operations",
+        "id": "fnd-02815d0bff50c176",
+        "producer": "spec.security",
+        "severity": "info",
+        "status": "REFUTED",
+        "status_reason": "a supporting claim was refuted by verification",
+        "subject_id": "prop-4c779ea4f01dc091",
+        "title": "New per-tool Prometheus metrics are added on the shared registry"
+      },
+      {
+        "category": "operations",
+        "id": "fnd-032f96beb1630d26",
+        "producer": "spec.sre",
+        "severity": "minor",
+        "status": "CONFIRMED",
+        "status_reason": "all supporting claims verified",
+        "subject_id": "prop-2e668f554d8554a3",
+        "title": "Timed-out executor task keeps running and can exhaust the default thread pool"
+      },
+      {
+        "category": "security",
+        "id": "fnd-03d7a5b305003d35",
+        "producer": "spec.security",
+        "severity": "minor",
+        "status": "REFUTED",
+        "status_reason": "a supporting claim was refuted by verification",
+        "subject_id": "prop-4c779ea4f01dc091",
+        "title": "json.validate URL/path rejection is a string heuristic that can misfire"
+      },
+      {
+        "category": "tooling",
+        "id": "fnd-0a520c39a5d282b4",
+        "producer": "spec.qa",
+        "severity": "minor",
+        "status": "CONFIRMED",
+        "status_reason": "all supporting claims verified",
+        "subject_id": "prop-4c779ea4f01dc091",
+        "title": "Two verification claims use patterns too weak to be meaningful"
+      },
+      {
+        "category": "tooling",
+        "id": "fnd-0c353a34402b4da1",
+        "producer": "spec.qa",
+        "severity": "major",
+        "status": "CONFIRMED",
+        "status_reason": "all supporting claims verified",
+        "subject_id": "prop-4c779ea4f01dc091",
+        "title": "New PyYAML dependency availability is an unverified critical assumption"
+      },
+      {
+        "category": "operations",
+        "id": "fnd-0f33a1090a905955",
+        "producer": "magi.balthasar",
+        "severity": "info",
+        "status": "UNRESOLVED",
+        "status_reason": "supporting claims could not be verified",
+        "subject_id": "prop-4625b0e254ff31a5",
+        "title": "PyYAML pin deferred to implementation time"
+      },
+      {
+        "category": "documentation",
+        "id": "fnd-10a37ced26695f61",
+        "producer": "magi.balthasar",
+        "severity": "info",
+        "status": "CONFIRMED",
+        "status_reason": "all supporting claims verified",
+        "subject_id": "067510f2ab576e5680726fa3ac4298d9af4e1f47",
+        "title": "Docs list a router-level finding code TOOL_INPUT_ERROR that the router does not appear to emit"
+      },
+      {
+        "category": "design",
+        "id": "fnd-13ccaf8cf2c877e5",
+        "producer": "magi.casper",
+        "severity": "info",
+        "status": "REFUTED",
+        "status_reason": "a supporting claim was refuted by verification",
+        "subject_id": "prop-4625b0e254ff31a5",
+        "title": "Findings-cap breach returned as HTTP 413 is semantically loose"
+      },
+      {
+        "category": "operations",
+        "id": "fnd-18beeb576c54fd04",
+        "producer": "spec.security",
+        "severity": "minor",
+        "status": "UNRESOLVED",
+        "status_reason": "supporting claims could not be verified",
+        "subject_id": "prop-cfda3b8afd2a5616",
+        "title": "CPU-bound endpoints may be unthrottled because slowapi has no middleware or per-route decorator"
+      },
+      {
+        "category": "security",
+        "id": "fnd-1cf17b3381ff2865",
+        "producer": "spec.security",
+        "severity": "major",
+        "status": "UNRESOLVED",
+        "status_reason": "supporting claims could not be verified",
+        "subject_id": "prop-cfda3b8afd2a5616",
+        "title": "json.validate rejects URL/path-like input by string heuristic, which is not a security control and can reject valid JSON"
+      },
+      {
+        "category": "design",
+        "id": "fnd-213e8f36a8a81c53",
+        "producer": "spec.qa",
+        "severity": "minor",
+        "status": "CONFIRMED",
+        "status_reason": "all supporting claims verified",
+        "subject_id": "prop-4c779ea4f01dc091",
+        "title": "Per-tool Prometheus metrics add surface without a demonstrated need"
+      },
+      {
+        "category": "documentation",
+        "id": "fnd-21d3c00ff3de7b5a",
+        "producer": "doc.tech_writer",
+        "severity": "minor",
+        "status": "CONFIRMED",
+        "status_reason": "all supporting claims verified",
+        "subject_id": "prop-cfda3b8afd2a5616",
+        "title": "Docs-index update relies on an unverified literal heading"
+      },
+      {
+        "category": "tooling",
+        "id": "fnd-229b03be598e98eb",
+        "producer": "spec.qa",
+        "severity": "major",
+        "status": "CONFIRMED",
+        "status_reason": "all supporting claims verified",
+        "subject_id": "prop-e01963b9410d23d6",
+        "title": "New PyYAML dependency availability is an unverified critical assumption"
+      },
+      {
+        "category": "local_bug",
+        "id": "fnd-233350ad9b2ec819",
+        "producer": "spec.security",
+        "severity": "minor",
+        "status": "CONFIRMED",
+        "status_reason": "all supporting claims verified",
+        "subject_id": "b11ba2bab7308f2e8f32205d79dcfae9e9f0f6ae",
+        "title": "Any image reference containing '@' is treated as digest-pinned"
+      },
+      {
+        "category": "tooling",
+        "id": "fnd-246583ce92f7fe26",
+        "producer": "magi.balthasar",
+        "severity": "info",
+        "status": "CONFIRMED",
+        "status_reason": "all supporting claims verified",
+        "subject_id": "067510f2ab576e5680726fa3ac4298d9af4e1f47",
+        "title": "Plan verification items for metrics and middleware interaction have no matching evidence or test"
+      },
+      {
+        "category": "operations",
+        "id": "fnd-24c0d3419bf93bca",
+        "producer": "spec.sre",
+        "severity": "major",
+        "status": "CONFIRMED",
+        "status_reason": "all supporting claims verified",
+        "subject_id": "prop-e01963b9410d23d6",
+        "title": "Custom 404 body for unknown tool can be collapsed by the app-wide 404 handler"
+      },
+      {
+        "category": "operations",
+        "id": "fnd-2509ac6b7fb2213b",
+        "producer": "spec.sre",
+        "severity": "minor",
+        "status": "CONFIRMED",
+        "status_reason": "all supporting claims verified",
+        "subject_id": "prop-2e668f554d8554a3",
+        "title": "No operational kill switch: router is mounted unconditionally"
+      },
+      {
+        "category": "operations",
+        "id": "fnd-26282e35d8721341",
+        "producer": "spec.sre",
+        "severity": "minor",
+        "status": "CONFIRMED",
+        "status_reason": "all supporting claims verified",
+        "subject_id": "prop-4625b0e254ff31a5",
+        "title": "Timed-out executor task keeps running and can exhaust the default thread pool"
+      },
+      {
+        "category": "tooling",
+        "id": "fnd-297646fd2bc038c2",
+        "producer": "dev.pair",
+        "severity": "info",
+        "status": "CONFIRMED",
+        "status_reason": "all supporting claims verified",
+        "subject_id": "prop-2e668f554d8554a3",
+        "title": "No type checker is configured in the repository"
+      },
+      {
+        "category": "design",
+        "id": "fnd-2988ed3c939cf3e5",
+        "producer": "magi.casper",
+        "severity": "minor",
+        "status": "CONFIRMED",
+        "status_reason": "all supporting claims verified",
+        "subject_id": "067510f2ab576e5680726fa3ac4298d9af4e1f47",
+        "title": "text.diff publishes a schema bound (50) that is stricter than the effective default limit (10)"
+      },
+      {
+        "category": "tooling",
+        "id": "fnd-2ab6921146019fd2",
+        "producer": "spec.qa",
+        "severity": "major",
+        "status": "CONFIRMED",
+        "status_reason": "all supporting claims verified",
+        "subject_id": "prop-a4f87e35bf03b7a5",
+        "title": "New PyYAML dependency availability is an unverified critical assumption"
+      },
+      {
+        "category": "design",
+        "id": "fnd-2af542b083841b19",
+        "producer": "spec.qa",
+        "severity": "minor",
+        "status": "UNRESOLVED",
+        "status_reason": "supporting claims could not be verified",
+        "subject_id": "prop-4625b0e254ff31a5",
+        "title": "json.validate URL/path heuristic can reject valid JSON text"
+      },
+      {
+        "category": "documentation",
+        "id": "fnd-2f6d364a278b447d",
+        "producer": "doc.tech_writer",
+        "severity": "info",
+        "status": "CONFIRMED",
+        "status_reason": "all supporting claims verified",
+        "subject_id": "prop-a4f87e35bf03b7a5",
+        "title": "No README.md pointer planned"
+      },
+      {
+        "category": "security",
+        "id": "fnd-30a6fa8217f2b774",
+        "producer": "spec.security",
+        "severity": "minor",
+        "status": "UNRESOLVED",
+        "status_reason": "supporting claims could not be verified",
+        "subject_id": "prop-cfda3b8afd2a5616",
+        "title": "Input-size limit is applied to the parsed string, so the full body is buffered before rejection"
+      },
+      {
+        "category": "design",
+        "id": "fnd-30dff5b56cb53262",
+        "producer": "magi.casper",
+        "severity": "info",
+        "status": "CONFIRMED",
+        "status_reason": "all supporting claims verified",
+        "subject_id": "067510f2ab576e5680726fa3ac4298d9af4e1f47",
+        "title": "The YAML alias budget accumulates across all documents of a multi-document manifest"
+      },
+      {
+        "category": "documentation",
+        "id": "fnd-34b5cfdbb4cd2f48",
+        "producer": "doc.tech_writer",
+        "severity": "major",
+        "status": "REFUTED",
+        "status_reason": "a supporting claim was refuted by verification",
+        "subject_id": "prop-a4f87e35bf03b7a5",
+        "title": "curl examples must carry Basic Auth, otherwise they are not 'working curl examples'"
+      },
+      {
+        "category": "operations",
+        "id": "fnd-38adc77e6b5245c6",
+        "producer": "spec.sre",
+        "severity": "minor",
+        "status": "CONFIRMED",
+        "status_reason": "all supporting claims verified",
+        "subject_id": "prop-e01963b9410d23d6",
+        "title": "No execution timeout on the run_in_executor dispatch"
+      },
+      {
+        "category": "tooling",
+        "id": "fnd-3ad34a08d0ef6839",
+        "producer": "dev.writer",
+        "severity": "major",
+        "status": "CONFIRMED",
+        "status_reason": "all supporting claims verified",
+        "subject_id": "prop-2e668f554d8554a3",
+        "title": "A failing Kubernetes test was rewritten to make the suite green"
+      },
+      {
+        "category": "design",
+        "id": "fnd-3c04b4a48b9256cb",
+        "producer": "magi.balthasar",
+        "severity": "info",
+        "status": "CONFIRMED",
+        "status_reason": "all supporting claims verified",
+        "subject_id": "067510f2ab576e5680726fa3ac4298d9af4e1f47",
+        "title": "Invalid YAML returns partial findings from documents parsed before the error"
+      },
+      {
+        "category": "operations",
+        "id": "fnd-40271829acf45f2d",
+        "producer": "magi.melchior",
+        "severity": "info",
+        "status": "CONFIRMED",
+        "status_reason": "all supporting claims verified",
+        "subject_id": "067510f2ab576e5680726fa3ac4298d9af4e1f47",
+        "title": "No toolbox-specific metrics; visibility relies on the existing instrumentator"
+      },
+      {
+        "category": "operations",
+        "id": "fnd-412fe3e23ee08cbb",
+        "producer": "spec.security",
+        "severity": "info",
+        "status": "CONFIRMED",
+        "status_reason": "all supporting claims verified",
+        "subject_id": "prop-e01963b9410d23d6",
+        "title": "CPU-bound toolbox endpoints inherit whatever (possibly absent) rate limiting the app has today"
+      },
+      {
+        "category": "design",
+        "id": "fnd-4354bf5515ca3039",
+        "producer": "magi.melchior",
+        "severity": "info",
+        "status": "CONFIRMED",
+        "status_reason": "all supporting claims verified",
+        "subject_id": "067510f2ab576e5680726fa3ac4298d9af4e1f47",
+        "title": "Tool-input schema mismatch returns a bespoke 422 envelope"
+      },
+      {
+        "category": "operations",
+        "id": "fnd-439d101abdc36f3b",
+        "producer": "magi.balthasar",
+        "severity": "minor",
+        "status": "CONFIRMED",
+        "status_reason": "all supporting claims verified",
+        "subject_id": "067510f2ab576e5680726fa3ac4298d9af4e1f47",
+        "title": "Timeout path does not cancel the worker thread; a timed-out run keeps consuming CPU"
+      },
+      {
+        "category": "operations",
+        "id": "fnd-44d4e9c86235aea9",
+        "producer": "dev.pair",
+        "severity": "info",
+        "status": "CONFIRMED",
+        "status_reason": "all supporting claims verified",
+        "subject_id": "prop-2e668f554d8554a3",
+        "title": "The 504 timeout path has no test"
+      },
+      {
+        "category": "security",
+        "id": "fnd-473ce3e8d415f005",
+        "producer": "spec.security",
+        "severity": "major",
+        "status": "UNRESOLVED",
+        "status_reason": "supporting claims could not be verified",
+        "subject_id": "prop-4625b0e254ff31a5",
+        "title": "YAML depth and alias budget must abort during composition and be independently bounded"
+      },
+      {
+        "category": "operations",
+        "id": "fnd-48758cc2a25a2101",
+        "producer": "spec.sre",
+        "severity": "info",
+        "status": "CONFIRMED",
+        "status_reason": "all supporting claims verified",
+        "subject_id": "prop-cfda3b8afd2a5616",
+        "title": "Per-tool metrics are not added; only route-level metrics are available"
+      },
+      {
+        "category": "security",
+        "id": "fnd-4989b3710a09656f",
+        "producer": "spec.security",
+        "severity": "info",
+        "status": "CONFIRMED",
+        "status_reason": "all supporting claims verified",
+        "subject_id": "067510f2ab576e5680726fa3ac4298d9af4e1f47",
+        "title": "Toolbox endpoints reuse the existing Basic-Auth control and are not public"
+      },
+      {
+        "category": "operations",
+        "id": "fnd-499fbd44db24873c",
+        "producer": "spec.sre",
+        "severity": "info",
+        "status": "CONFIRMED",
+        "status_reason": "all supporting claims verified",
+        "subject_id": "prop-4625b0e254ff31a5",
+        "title": "HTTP 413 is reused for the findings cap and other non-size limits"
+      },
+      {
+        "category": "operations",
+        "id": "fnd-4a449df40ab107ab",
+        "producer": "spec.sre",
+        "severity": "info",
+        "status": "CONFIRMED",
+        "status_reason": "all supporting claims verified",
+        "subject_id": "prop-cfda3b8afd2a5616",
+        "title": "HTTP 413 is reused for non-size limits (findings cap, depth, document count)"
+      },
+      {
+        "category": "tooling",
+        "id": "fnd-4b80d26480388562",
+        "producer": "magi.melchior",
+        "severity": "info",
+        "status": "CONFIRMED",
+        "status_reason": "all supporting claims verified",
+        "subject_id": "067510f2ab576e5680726fa3ac4298d9af4e1f47",
+        "title": "Final diff is truncated: several planned files are not visible for review"
+      },
+      {
+        "category": "design",
+        "id": "fnd-4d41f052df78170e",
+        "producer": "magi.balthasar",
+        "severity": "info",
+        "status": "UNRESOLVED",
+        "status_reason": "supporting claims could not be verified",
+        "subject_id": "prop-4625b0e254ff31a5",
+        "title": "Heuristic URL/path rejection can reject valid JSON text"
+      },
+      {
+        "category": "operations",
+        "id": "fnd-4e4594fb34c98283",
+        "producer": "dev.writer",
+        "severity": "info",
+        "status": "CONFIRMED",
+        "status_reason": "all supporting claims verified",
+        "subject_id": "prop-2e668f554d8554a3",
+        "title": "Toolbox observability relies entirely on the existing stack"
+      },
+      {
+        "category": "design",
+        "id": "fnd-4f9782f002ed0243",
+        "producer": "spec.security",
+        "severity": "minor",
+        "status": "REFUTED",
+        "status_reason": "a supporting claim was refuted by verification",
+        "subject_id": "prop-2e668f554d8554a3",
+        "title": "Finding model adds a `category` field beyond the mandated result contract"
+      },
+      {
+        "category": "design",
+        "id": "fnd-52aa3a02338479d3",
+        "producer": "magi.melchior",
+        "severity": "info",
+        "status": "CONFIRMED",
+        "status_reason": "all supporting claims verified",
+        "subject_id": "067510f2ab576e5680726fa3ac4298d9af4e1f47",
+        "title": "text.diff published schema bound (50) exceeds the effective configured limit (10)"
+      },
+      {
+        "category": "design",
+        "id": "fnd-54ee3f3a04c79485",
+        "producer": "spec.qa",
+        "severity": "minor",
+        "status": "CONFIRMED",
+        "status_reason": "all supporting claims verified",
+        "subject_id": "067510f2ab576e5680726fa3ac4298d9af4e1f47",
+        "title": "text.diff published input_schema advertises context_lines up to 50 while the effective runtime limit defaults to 10"
+      },
+      {
+        "category": "operations",
+        "id": "fnd-553cf6ec1a8c5fad",
+        "producer": "spec.sre",
+        "severity": "minor",
+        "status": "CONFIRMED",
+        "status_reason": "all supporting claims verified",
+        "subject_id": "b11ba2bab7308f2e8f32205d79dcfae9e9f0f6ae",
+        "title": "max_findings is enforced only after all documents are processed"
+      },
+      {
+        "category": "design",
+        "id": "fnd-56757f41e70c0664",
+        "producer": "magi.balthasar",
+        "severity": "info",
+        "status": "UNRESOLVED",
+        "status_reason": "supporting claims could not be verified",
+        "subject_id": "prop-cfda3b8afd2a5616",
+        "title": "Heuristic URL/path rejection can reject valid JSON text"
+      },
+      {
+        "category": "design",
+        "id": "fnd-5750015371803dae",
+        "producer": "spec.qa",
+        "severity": "minor",
+        "status": "UNRESOLVED",
+        "status_reason": "supporting claims could not be verified",
+        "subject_id": "prop-a4f87e35bf03b7a5",
+        "title": "outcome=fail is produced for warning-only manifests, conflating missing and risky configuration"
+      },
+      {
+        "category": "tooling",
+        "id": "fnd-579a2e55b21d79ca",
+        "producer": "magi.casper",
+        "severity": "info",
+        "status": "CONFIRMED",
+        "status_reason": "all supporting claims verified",
+        "subject_id": "067510f2ab576e5680726fa3ac4298d9af4e1f47",
+        "title": "Review input is a truncated diff: router, base, models, settings and main are not visible"
+      },
+      {
+        "category": "local_bug",
+        "id": "fnd-58fae6fc448d186b",
+        "producer": "magi.casper",
+        "severity": "minor",
+        "status": "CONFIRMED",
+        "status_reason": "all supporting claims verified",
+        "subject_id": "067510f2ab576e5680726fa3ac4298d9af4e1f47",
+        "title": "text.diff is insensitive to trailing-newline-only differences"
+      },
+      {
+        "category": "tooling",
+        "id": "fnd-59b42b720b906505",
+        "producer": "spec.sre",
+        "severity": "minor",
+        "status": "CONFIRMED",
+        "status_reason": "all supporting claims verified",
+        "subject_id": "067510f2ab576e5680726fa3ac4298d9af4e1f47",
+        "title": "No test exercises the run-timeout (504) path"
+      },
+      {
+        "category": "documentation",
+        "id": "fnd-5abfe6a35ab4ae02",
+        "producer": "doc.tech_writer",
+        "severity": "info",
+        "status": "CONFIRMED",
+        "status_reason": "all supporting claims verified",
+        "subject_id": "prop-4c779ea4f01dc091",
+        "title": "No README.md pointer planned"
+      },
+      {
+        "category": "security",
+        "id": "fnd-5f2accece2cb328b",
+        "producer": "spec.security",
+        "severity": "minor",
+        "status": "UNRESOLVED",
+        "status_reason": "supporting claims could not be verified",
+        "subject_id": "prop-2e668f554d8554a3",
+        "title": "Input-size limit is applied after the body is buffered"
+      },
+      {
+        "category": "operations",
+        "id": "fnd-607f11e43e8c9f5c",
+        "producer": "spec.security",
+        "severity": "minor",
+        "status": "CONFIRMED",
+        "status_reason": "all supporting claims verified",
+        "subject_id": "b11ba2bab7308f2e8f32205d79dcfae9e9f0f6ae",
+        "title": "text.diff worker thread is not cancellable when the run timeout fires"
+      },
+      {
+        "category": "security",
+        "id": "fnd-620ca500e1765f21",
+        "producer": "spec.security",
+        "severity": "minor",
+        "status": "CONFIRMED",
+        "status_reason": "all supporting claims verified",
+        "subject_id": "b11ba2bab7308f2e8f32205d79dcfae9e9f0f6ae",
+        "title": "Suspicion: the client-supplied tool id is written to the structured log line"
+      },
+      {
+        "category": "security",
+        "id": "fnd-62941b76a08bf39c",
+        "producer": "spec.security",
+        "severity": "major",
+        "status": "REFUTED",
+        "status_reason": "a supporting claim was refuted by verification",
+        "subject_id": "prop-e01963b9410d23d6",
+        "title": "YAML alias/anchor expansion is not bounded by a dedicated budget (billion-laughs DoS)"
+      },
+      {
+        "category": "security",
+        "id": "fnd-646ab30e5bf344a0",
+        "producer": "spec.security",
+        "severity": "minor",
+        "status": "UNRESOLVED",
+        "status_reason": "supporting claims could not be verified",
+        "subject_id": "prop-a4f87e35bf03b7a5",
+        "title": "json.validate does not reject URL- or path-like input"
+      },
+      {
+        "category": "documentation",
+        "id": "fnd-65fdbc3de98c28b7",
+        "producer": "doc.tech_writer",
+        "severity": "major",
+        "status": "REFUTED",
+        "status_reason": "a supporting claim was refuted by verification",
+        "subject_id": "prop-e01963b9410d23d6",
+        "title": "curl examples must carry Basic Auth, otherwise they are not 'working curl examples'"
+      },
+      {
+        "category": "operations",
+        "id": "fnd-6658030a8f2dced0",
+        "producer": "magi.balthasar",
+        "severity": "minor",
+        "status": "REFUTED",
+        "status_reason": "a supporting claim was refuted by verification",
+        "subject_id": "prop-e01963b9410d23d6",
+        "title": "No timeout on the executor-dispatched tool run"
+      },
+      {
+        "category": "security",
+        "id": "fnd-6721dfb353a263c9",
+        "producer": "spec.security",
+        "severity": "minor",
+        "status": "UNRESOLVED",
+        "status_reason": "supporting claims could not be verified",
+        "subject_id": "prop-4625b0e254ff31a5",
+        "title": "Input-size limit is applied after the body is buffered"
+      },
+      {
+        "category": "documentation",
+        "id": "fnd-67809954d6e1898d",
+        "producer": "doc.tech_writer",
+        "severity": "minor",
+        "status": "REFUTED",
+        "status_reason": "a supporting claim was refuted by verification",
+        "subject_id": "prop-cfda3b8afd2a5616",
+        "title": "Coverage table references a requirement id that is not in the requirement list"
+      },
+      {
+        "category": "local_bug",
+        "id": "fnd-696453b1ab3a0fb7",
+        "producer": "spec.security",
+        "severity": "minor",
+        "status": "CONFIRMED",
+        "status_reason": "all supporting claims verified",
+        "subject_id": "b11ba2bab7308f2e8f32205d79dcfae9e9f0f6ae",
+        "title": "max_findings is enforced only after all documents are processed and is skipped on the YAML-error path"
+      },
+      {
+        "category": "design",
+        "id": "fnd-6bb2d1f14c02e7e4",
+        "producer": "magi.casper",
+        "severity": "info",
+        "status": "REFUTED",
+        "status_reason": "a supporting claim was refuted by verification",
+        "subject_id": "prop-2e668f554d8554a3",
+        "title": "Finding model adds a category field beyond the mandated contract"
+      },
+      {
+        "category": "security",
+        "id": "fnd-6ed86e401b5162ed",
+        "producer": "spec.security",
+        "severity": "minor",
+        "status": "REFUTED",
+        "status_reason": "a supporting claim was refuted by verification",
+        "subject_id": "prop-4c779ea4f01dc091",
+        "title": "Depth-limit enforcement mechanism is unspecified"
+      },
+      {
+        "category": "documentation",
+        "id": "fnd-75b54dfcc7fdd601",
+        "producer": "dev.pair",
+        "severity": "info",
+        "status": "REFUTED",
+        "status_reason": "a supporting claim was refuted by verification",
+        "subject_id": "prop-2e668f554d8554a3",
+        "title": "Documentation set is now present and consistent with the implementation"
+      },
+      {
+        "category": "security",
+        "id": "fnd-7645c48be2c8f74c",
+        "producer": "spec.security",
+        "severity": "minor",
+        "status": "REFUTED",
+        "status_reason": "a supporting claim was refuted by verification",
+        "subject_id": "prop-a4f87e35bf03b7a5",
+        "title": "Depth-limit enforcement mechanism is unspecified"
+      },
+      {
+        "category": "design",
+        "id": "fnd-76eb61540703ee02",
+        "producer": "magi.casper",
+        "severity": "minor",
+        "status": "CONFIRMED",
+        "status_reason": "all supporting claims verified",
+        "subject_id": "067510f2ab576e5680726fa3ac4298d9af4e1f47",
+        "title": "An empty manifest string yields outcome=pass with zero findings and is untested"
+      },
+      {
+        "category": "security",
+        "id": "fnd-7754045f42a70ea2",
+        "producer": "spec.security",
+        "severity": "major",
+        "status": "UNRESOLVED",
+        "status_reason": "supporting claims could not be verified",
+        "subject_id": "prop-2e668f554d8554a3",
+        "title": "Payload logging must be verified against the existing request-logging middleware"
+      },
+      {
+        "category": "operations",
+        "id": "fnd-7770fa2f1c4076e6",
+        "producer": "spec.sre",
+        "severity": "info",
+        "status": "CONFIRMED",
+        "status_reason": "all supporting claims verified",
+        "subject_id": "prop-4c779ea4f01dc091",
+        "title": "500 body carries run_id in the detail field"
+      },
+      {
+        "category": "design",
+        "id": "fnd-7978bd53cc4eaf70",
+        "producer": "magi.melchior",
+        "severity": "minor",
+        "status": "UNRESOLVED",
+        "status_reason": "supporting claims could not be verified",
+        "subject_id": "prop-cfda3b8afd2a5616",
+        "title": "json.validate URL/path prefix heuristic can reject valid JSON"
+      },
+      {
+        "category": "documentation",
+        "id": "fnd-7b3cdf5481ec2de9",
+        "producer": "doc.tech_writer",
+        "severity": "minor",
+        "status": "REFUTED",
+        "status_reason": "a supporting claim was refuted by verification",
+        "subject_id": "prop-4625b0e254ff31a5",
+        "title": "Documentation plan does not explicitly cover run_id correlation-only semantics"
+      },
+      {
+        "category": "operations",
+        "id": "fnd-7d8dad398593d868",
+        "producer": "spec.sre",
+        "severity": "info",
+        "status": "CONFIRMED",
+        "status_reason": "all supporting claims verified",
+        "subject_id": "prop-a4f87e35bf03b7a5",
+        "title": "Unknown tool returns the generic app-wide 404 envelope"
+      },
+      {
+        "category": "operations",
+        "id": "fnd-7e7f93721d1cd813",
+        "producer": "spec.sre",
+        "severity": "minor",
+        "status": "CONFIRMED",
+        "status_reason": "all supporting claims verified",
+        "subject_id": "prop-cfda3b8afd2a5616",
+        "title": "No operational kill switch: router is mounted unconditionally"
+      },
+      {
+        "category": "operations",
+        "id": "fnd-7fb355af317d4c1d",
+        "producer": "spec.sre",
+        "severity": "major",
+        "status": "CONFIRMED",
+        "status_reason": "all supporting claims verified",
+        "subject_id": "prop-2e668f554d8554a3",
+        "title": "New runtime dependency PyYAML is added without a pinned version"
+      },
+      {
+        "category": "tooling",
+        "id": "fnd-81da46c0541f4c8e",
+        "producer": "spec.qa",
+        "severity": "minor",
+        "status": "UNRESOLVED",
+        "status_reason": "supporting claims could not be verified",
+        "subject_id": "prop-e01963b9410d23d6",
+        "title": "No test asserts the toolbox routes inherit the existing rate limiting"
+      },
+      {
+        "category": "design",
+        "id": "fnd-82bab6fc67b714f6",
+        "producer": "dev.pair",
+        "severity": "minor",
+        "status": "CONFIRMED",
+        "status_reason": "all supporting claims verified",
+        "subject_id": "prop-2e668f554d8554a3",
+        "title": "k8s max_findings is enforced only after the full findings list is accumulated"
+      },
+      {
+        "category": "operations",
+        "id": "fnd-835d022d86a7c3e2",
+        "producer": "spec.sre",
+        "severity": "major",
+        "status": "CONFIRMED",
+        "status_reason": "all supporting claims verified",
+        "subject_id": "prop-cfda3b8afd2a5616",
+        "title": "PyYAML becomes a hard application-startup dependency, not just a toolbox dependency"
+      },
+      {
+        "category": "operations",
+        "id": "fnd-8582c7bb22594ec9",
+        "producer": "spec.sre",
+        "severity": "info",
+        "status": "CONFIRMED",
+        "status_reason": "all supporting claims verified",
+        "subject_id": "prop-4625b0e254ff31a5",
+        "title": "toolbox_enabled flag must default to true on a default deployment"
+      },
+      {
+        "category": "design",
+        "id": "fnd-8a58f6050b021e7e",
+        "producer": "magi.balthasar",
+        "severity": "info",
+        "status": "CONFIRMED",
+        "status_reason": "all supporting claims verified",
+        "subject_id": "067510f2ab576e5680726fa3ac4298d9af4e1f47",
+        "title": "max_findings is a post-hoc check, not a hard cap during processing"
+      },
+      {
+        "category": "operations",
+        "id": "fnd-8bc5d2e74ef6d952",
+        "producer": "spec.security",
+        "severity": "minor",
+        "status": "REFUTED",
+        "status_reason": "a supporting claim was refuted by verification",
+        "subject_id": "prop-a4f87e35bf03b7a5",
+        "title": "Executor timeout can leave a worker thread running after the response"
+      },
+      {
+        "category": "documentation",
+        "id": "fnd-90c3e9405b5f0ca6",
+        "producer": "doc.tech_writer",
+        "severity": "minor",
+        "status": "REFUTED",
+        "status_reason": "a supporting claim was refuted by verification",
+        "subject_id": "prop-a4f87e35bf03b7a5",
+        "title": "No reference table of finding codes and severities is planned"
+      },
+      {
+        "category": "documentation",
+        "id": "fnd-930781a48b1900e9",
+        "producer": "doc.tech_writer",
+        "severity": "minor",
+        "status": "REFUTED",
+        "status_reason": "a supporting claim was refuted by verification",
+        "subject_id": "prop-a4f87e35bf03b7a5",
+        "title": "One numbered document mixes four Di\u00e1taxis modes"
+      },
+      {
+        "category": "documentation",
+        "id": "fnd-9333bdcaba1b1dec",
+        "producer": "doc.tech_writer",
+        "severity": "minor",
+        "status": "REFUTED",
+        "status_reason": "a supporting claim was refuted by verification",
+        "subject_id": "prop-a4f87e35bf03b7a5",
+        "title": "Unknown-tool 404 is collapsed by the app-wide handler; docs must not promise a tool-specific message"
+      },
+      {
+        "category": "operations",
+        "id": "fnd-93599f10113130ad",
+        "producer": "spec.security",
+        "severity": "minor",
+        "status": "CONFIRMED",
+        "status_reason": "all supporting claims verified",
+        "subject_id": "067510f2ab576e5680726fa3ac4298d9af4e1f47",
+        "title": "max_findings is enforced only after the full findings list is materialised"
+      },
+      {
+        "category": "security",
+        "id": "fnd-9436944295c5167d",
+        "producer": "spec.security",
+        "severity": "major",
+        "status": "UNRESOLVED",
+        "status_reason": "supporting claims could not be verified",
+        "subject_id": "prop-cfda3b8afd2a5616",
+        "title": "YAML depth and alias/anchor expansion must be bounded during composition, not after parsing"
+      },
+      {
+        "category": "design",
+        "id": "fnd-94ee9069ff97ccd9",
+        "producer": "spec.qa",
+        "severity": "info",
+        "status": "UNRESOLVED",
+        "status_reason": "supporting claims could not be verified",
+        "subject_id": "prop-2e668f554d8554a3",
+        "title": "Drops the URL/path heuristic; divergence from the other proposals"
+      },
+      {
+        "category": "documentation",
+        "id": "fnd-96cfdf7cd78173a6",
+        "producer": "dev.writer",
+        "severity": "major",
+        "status": "CONFIRMED",
+        "status_reason": "all supporting claims verified",
+        "subject_id": "prop-2e668f554d8554a3",
+        "title": "Documentation deliverables from the approved plan were not written"
+      },
+      {
+        "category": "operations",
+        "id": "fnd-99a8608ba199b3bf",
+        "producer": "spec.security",
+        "severity": "minor",
+        "status": "UNRESOLVED",
+        "status_reason": "supporting claims could not be verified",
+        "subject_id": "prop-2e668f554d8554a3",
+        "title": "CPU-bound endpoints may be unthrottled because slowapi has no middleware or per-route decorator"
+      },
+      {
+        "category": "design",
+        "id": "fnd-9dbe22476dd6b401",
+        "producer": "spec.qa",
+        "severity": "minor",
+        "status": "UNRESOLVED",
+        "status_reason": "supporting claims could not be verified",
+        "subject_id": "prop-2e668f554d8554a3",
+        "title": "Catalog response is an object, not the list the mandate describes"
+      },
+      {
+        "category": "design",
+        "id": "fnd-9f1782e7264c4b4c",
+        "producer": "magi.balthasar",
+        "severity": "info",
+        "status": "CONFIRMED",
+        "status_reason": "all supporting claims verified",
+        "subject_id": "067510f2ab576e5680726fa3ac4298d9af4e1f47",
+        "title": "text.diff added/removed counters can miscount content lines that start with +++ or ---"
+      },
+      {
+        "category": "tooling",
+        "id": "fnd-9fd027ecb6adf847",
+        "producer": "magi.casper",
+        "severity": "minor",
+        "status": "CONFIRMED",
+        "status_reason": "all supporting claims verified",
+        "subject_id": "067510f2ab576e5680726fa3ac4298d9af4e1f47",
+        "title": "The documented 504 timeout path has no test"
+      },
+      {
+        "category": "documentation",
+        "id": "fnd-a1e135182482a67d",
+        "producer": "doc.tech_writer",
+        "severity": "minor",
+        "status": "REFUTED",
+        "status_reason": "a supporting claim was refuted by verification",
+        "subject_id": "prop-e01963b9410d23d6",
+        "title": "run_id semantics and the absence of GET /runs/{id} must be documented"
+      },
+      {
+        "category": "design",
+        "id": "fnd-a241dbd57f060d52",
+        "producer": "magi.balthasar",
+        "severity": "info",
+        "status": "UNRESOLVED",
+        "status_reason": "supporting claims could not be verified",
+        "subject_id": "prop-a4f87e35bf03b7a5",
+        "title": "Outcome rule marks warning-only manifests as fail"
+      },
+      {
+        "category": "operations",
+        "id": "fnd-a2dce47f5c8155a1",
+        "producer": "spec.sre",
+        "severity": "minor",
+        "status": "CONFIRMED",
+        "status_reason": "all supporting claims verified",
+        "subject_id": "b11ba2bab7308f2e8f32205d79dcfae9e9f0f6ae",
+        "title": "text.diff schema cap (50) is independent of the configurable context-lines limit"
+      },
+      {
+        "category": "documentation",
+        "id": "fnd-a56dd9cd5017e6c1",
+        "producer": "spec.security",
+        "severity": "info",
+        "status": "CONFIRMED",
+        "status_reason": "all supporting claims verified",
+        "subject_id": "067510f2ab576e5680726fa3ac4298d9af4e1f47",
+        "title": "K8s checks are explicitly framed as heuristic, not a validation or certification"
+      },
+      {
+        "category": "security",
+        "id": "fnd-a9f82b2b04adc766",
+        "producer": "spec.security",
+        "severity": "info",
+        "status": "CONFIRMED",
+        "status_reason": "all supporting claims verified",
+        "subject_id": "067510f2ab576e5680726fa3ac4298d9af4e1f47",
+        "title": "YAML parsing is confined to a bounded SafeLoader; no arbitrary object construction"
+      },
+      {
+        "category": "security",
+        "id": "fnd-aa54bd075949fa99",
+        "producer": "magi.balthasar",
+        "severity": "minor",
+        "status": "REFUTED",
+        "status_reason": "a supporting claim was refuted by verification",
+        "subject_id": "prop-a4f87e35bf03b7a5",
+        "title": "YAML depth limit enforcement not evidenced"
+      },
+      {
+        "category": "operations",
+        "id": "fnd-ac2558de9f6eb81f",
+        "producer": "spec.sre",
+        "severity": "info",
+        "status": "CONFIRMED",
+        "status_reason": "all supporting claims verified",
+        "subject_id": "b11ba2bab7308f2e8f32205d79dcfae9e9f0f6ae",
+        "title": "No per-tool metric family; invocation/error/duration visibility is HTTP-level only"
+      },
+      {
+        "category": "design",
+        "id": "fnd-ad14fa87c171b5a7",
+        "producer": "dev.pair",
+        "severity": "info",
+        "status": "CONFIRMED",
+        "status_reason": "all supporting claims verified",
+        "subject_id": "prop-2e668f554d8554a3",
+        "title": "Verified contracts: auth, error separation, determinism, no payload logging"
+      },
+      {
+        "category": "operations",
+        "id": "fnd-ae3593cdf3bd868d",
+        "producer": "spec.sre",
+        "severity": "minor",
+        "status": "CONFIRMED",
+        "status_reason": "all supporting claims verified",
+        "subject_id": "prop-4c779ea4f01dc091",
+        "title": "No execution timeout on the run_in_executor dispatch"
+      },
+      {
+        "category": "documentation",
+        "id": "fnd-ae79ceb8d7667c0c",
+        "producer": "doc.tech_writer",
+        "severity": "minor",
+        "status": "REFUTED",
+        "status_reason": "a supporting claim was refuted by verification",
+        "subject_id": "prop-4c779ea4f01dc091",
+        "title": "No reference table of finding codes and severities is planned"
+      },
+      {
+        "category": "security",
+        "id": "fnd-b0ce3285dd957036",
+        "producer": "spec.security",
+        "severity": "info",
+        "status": "CONFIRMED",
+        "status_reason": "all supporting claims verified",
+        "subject_id": "067510f2ab576e5680726fa3ac4298d9af4e1f47",
+        "title": "No payload/manifest/diff is logged and internal errors are sanitized"
+      },
+      {
+        "category": "operations",
+        "id": "fnd-b1f7a58f7e894dfd",
+        "producer": "spec.sre",
+        "severity": "minor",
+        "status": "CONFIRMED",
+        "status_reason": "all supporting claims verified",
+        "subject_id": "prop-e01963b9410d23d6",
+        "title": "PyYAML version pin deferred to implementation time"
+      },
+      {
+        "category": "design",
+        "id": "fnd-b342b2af4815d361",
+        "producer": "magi.balthasar",
+        "severity": "minor",
+        "status": "CONFIRMED",
+        "status_reason": "all supporting claims verified",
+        "subject_id": "067510f2ab576e5680726fa3ac4298d9af4e1f47",
+        "title": "Tool-input schema mismatch returns a bespoke 422 envelope instead of the app's validation envelope"
+      },
+      {
+        "category": "documentation",
+        "id": "fnd-b75d80f4f5b4c752",
+        "producer": "doc.tech_writer",
+        "severity": "major",
+        "status": "REFUTED",
+        "status_reason": "a supporting claim was refuted by verification",
+        "subject_id": "prop-2e668f554d8554a3",
+        "title": "Contradictory outcome semantics between coverage and assumption"
+      },
+      {
+        "category": "security",
+        "id": "fnd-b80a7aaeefff5b8f",
+        "producer": "spec.security",
+        "severity": "major",
+        "status": "REFUTED",
+        "status_reason": "a supporting claim was refuted by verification",
+        "subject_id": "prop-4c779ea4f01dc091",
+        "title": "YAML alias/anchor expansion is not addressed at all"
+      },
+      {
+        "category": "documentation",
+        "id": "fnd-b8540f91ba5daf82",
+        "producer": "doc.tech_writer",
+        "severity": "major",
+        "status": "REFUTED",
+        "status_reason": "a supporting claim was refuted by verification",
+        "subject_id": "prop-4c779ea4f01dc091",
+        "title": "curl examples must carry Basic Auth, otherwise they are not 'working curl examples'"
+      },
+      {
+        "category": "documentation",
+        "id": "fnd-b879509a1f0c904a",
+        "producer": "spec.qa",
+        "severity": "minor",
+        "status": "CONFIRMED",
+        "status_reason": "all supporting claims verified",
+        "subject_id": "067510f2ab576e5680726fa3ac4298d9af4e1f47",
+        "title": "docs/14-dev-sre-toolbox.md examples appear to lack fenced code blocks"
+      },
+      {
+        "category": "operations",
+        "id": "fnd-ba92d79b26a089ec",
+        "producer": "spec.sre",
+        "severity": "minor",
+        "status": "CONFIRMED",
+        "status_reason": "all supporting claims verified",
+        "subject_id": "067510f2ab576e5680726fa3ac4298d9af4e1f47",
+        "title": "Run timeout returns 504 but does not cancel the CPU-bound worker thread"
+      },
+      {
+        "category": "operations",
+        "id": "fnd-baa874744ba7dbbb",
+        "producer": "spec.sre",
+        "severity": "info",
+        "status": "CONFIRMED",
+        "status_reason": "all supporting claims verified",
+        "subject_id": "prop-2e668f554d8554a3",
+        "title": "No per-tool metrics; relies entirely on route-level instrumentation"
+      },
+      {
+        "category": "operations",
+        "id": "fnd-bb1a8924eedcbd7c",
+        "producer": "spec.sre",
+        "severity": "info",
+        "status": "UNRESOLVED",
+        "status_reason": "no checkable claims supplied",
+        "subject_id": "prop-e01963b9410d23d6",
+        "title": "HTTP 413 used for non-size limits"
+      },
+      {
+        "category": "documentation",
+        "id": "fnd-bb9a73270e0733f2",
+        "producer": "magi.balthasar",
+        "severity": "minor",
+        "status": "CONFIRMED",
+        "status_reason": "all supporting claims verified",
+        "subject_id": "067510f2ab576e5680726fa3ac4298d9af4e1f47",
+        "title": "Docs state TOOLBOX_MAX_FINDINGS applies to all tools, but only k8s.manifest.inspect enforces it"
+      },
+      {
+        "category": "design",
+        "id": "fnd-bc35309e7d507d2d",
+        "producer": "magi.balthasar",
+        "severity": "info",
+        "status": "CONFIRMED",
+        "status_reason": "all supporting claims verified",
+        "subject_id": "067510f2ab576e5680726fa3ac4298d9af4e1f47",
+        "title": "Cycle-aware depth walk under-counts depth for shared (DAG) nodes"
+      },
+      {
+        "category": "operations",
+        "id": "fnd-bc58805fb1c30cf5",
+        "producer": "spec.sre",
+        "severity": "minor",
+        "status": "CONFIRMED",
+        "status_reason": "all supporting claims verified",
+        "subject_id": "prop-cfda3b8afd2a5616",
+        "title": "Timed-out executor task keeps running and can exhaust the default thread pool"
+      },
+      {
+        "category": "documentation",
+        "id": "fnd-be0a35faa7315071",
+        "producer": "magi.melchior",
+        "severity": "minor",
+        "status": "CONFIRMED",
+        "status_reason": "all supporting claims verified",
+        "subject_id": "067510f2ab576e5680726fa3ac4298d9af4e1f47",
+        "title": "docs/14 code blocks appear to lack fenced-code markers"
+      },
+      {
+        "category": "local_bug",
+        "id": "fnd-c147b6a735d395f1",
+        "producer": "magi.casper",
+        "severity": "minor",
+        "status": "CONFIRMED",
+        "status_reason": "all supporting claims verified",
+        "subject_id": "067510f2ab576e5680726fa3ac4298d9af4e1f47",
+        "title": "k8s image check treats an empty tag (e.g. 'nginx:') as clean"
+      },
+      {
+        "category": "security",
+        "id": "fnd-c19945cd7b19dc9d",
+        "producer": "spec.security",
+        "severity": "info",
+        "status": "CONFIRMED",
+        "status_reason": "all supporting claims verified",
+        "subject_id": "067510f2ab576e5680726fa3ac4298d9af4e1f47",
+        "title": "json.validate never dereferences URLs or paths"
+      },
+      {
+        "category": "operations",
+        "id": "fnd-c1a664a7c1b9c47a",
+        "producer": "spec.sre",
+        "severity": "info",
+        "status": "CONFIRMED",
+        "status_reason": "all supporting claims verified",
+        "subject_id": "prop-4c779ea4f01dc091",
+        "title": "Two new metric families added to the existing /metrics surface"
+      },
+      {
+        "category": "tooling",
+        "id": "fnd-c322328c8467411f",
+        "producer": "spec.qa",
+        "severity": "minor",
+        "status": "CONFIRMED",
+        "status_reason": "all supporting claims verified",
+        "subject_id": "b11ba2bab7308f2e8f32205d79dcfae9e9f0f6ae",
+        "title": "Toolbox routes are not enumerable via app.routes"
+      },
+      {
+        "category": "operations",
+        "id": "fnd-c6d3c9c7467f7473",
+        "producer": "spec.security",
+        "severity": "minor",
+        "status": "CONFIRMED",
+        "status_reason": "all supporting claims verified",
+        "subject_id": "067510f2ab576e5680726fa3ac4298d9af4e1f47",
+        "title": "Depth budget relies on Python recursion; a very high configured max_yaml_depth would surface as 500, not 413"
+      },
+      {
+        "category": "documentation",
+        "id": "fnd-c79ebb3e77ef451e",
+        "producer": "magi.balthasar",
+        "severity": "minor",
+        "status": "REFUTED",
+        "status_reason": "a supporting claim was refuted by verification",
+        "subject_id": "prop-cfda3b8afd2a5616",
+        "title": "Coverage table references a non-existent requirement id"
+      },
+      {
+        "category": "operations",
+        "id": "fnd-c84e660828e507d8",
+        "producer": "spec.qa",
+        "severity": "info",
+        "status": "UNRESOLVED",
+        "status_reason": "supporting claims could not be verified",
+        "subject_id": "prop-a4f87e35bf03b7a5",
+        "title": "Timeout path of the executor offload is documented but untested"
+      },
+      {
+        "category": "operations",
+        "id": "fnd-c9394b12451fbaa1",
+        "producer": "spec.sre",
+        "severity": "major",
+        "status": "CONFIRMED",
+        "status_reason": "all supporting claims verified",
+        "subject_id": "prop-4625b0e254ff31a5",
+        "title": "PyYAML is a hard application-startup dependency"
+      },
+      {
+        "category": "security",
+        "id": "fnd-ca4d951655667252",
+        "producer": "spec.security",
+        "severity": "major",
+        "status": "UNRESOLVED",
+        "status_reason": "supporting claims could not be verified",
+        "subject_id": "prop-cfda3b8afd2a5616",
+        "title": "Payload logging must be verified against the existing request-logging middleware, not only the new log line"
+      },
+      {
+        "category": "security",
+        "id": "fnd-cbd7ba84533f248e",
+        "producer": "spec.security",
+        "severity": "major",
+        "status": "REFUTED",
+        "status_reason": "a supporting claim was refuted by verification",
+        "subject_id": "prop-a4f87e35bf03b7a5",
+        "title": "YAML alias/anchor expansion is not addressed at all"
+      },
+      {
+        "category": "security",
+        "id": "fnd-cbdddd0fc1d909c2",
+        "producer": "spec.security",
+        "severity": "minor",
+        "status": "UNRESOLVED",
+        "status_reason": "supporting claims could not be verified",
+        "subject_id": "prop-e01963b9410d23d6",
+        "title": "json.validate does not reject URL- or path-like input, only omits a URL/path parameter"
+      },
+      {
+        "category": "design",
+        "id": "fnd-cc013b5d32c84b3e",
+        "producer": "magi.balthasar",
+        "severity": "minor",
+        "status": "UNRESOLVED",
+        "status_reason": "supporting claims could not be verified",
+        "subject_id": "prop-e01963b9410d23d6",
+        "title": "Custom 404 body for unknown tool likely collapsed by the app-wide 404 handler"
+      },
+      {
+        "category": "design",
+        "id": "fnd-cd7aa200b2614529",
+        "producer": "spec.qa",
+        "severity": "minor",
+        "status": "UNRESOLVED",
+        "status_reason": "supporting claims could not be verified",
+        "subject_id": "prop-4c779ea4f01dc091",
+        "title": "json.validate rejects URL-like/path-like inputs heuristically"
+      },
+      {
+        "category": "documentation",
+        "id": "fnd-cf2bb625ef8b34de",
+        "producer": "doc.tech_writer",
+        "severity": "minor",
+        "status": "REFUTED",
+        "status_reason": "a supporting claim was refuted by verification",
+        "subject_id": "prop-4c779ea4f01dc091",
+        "title": "Extra contract surface (finding.category, 500 detail=run_id, per-tool metrics) must be documented"
+      },
+      {
+        "category": "design",
+        "id": "fnd-d0396dfab00c4214",
+        "producer": "spec.qa",
+        "severity": "minor",
+        "status": "UNRESOLVED",
+        "status_reason": "supporting claims could not be verified",
+        "subject_id": "prop-e01963b9410d23d6",
+        "title": "HTTP 413 is reused for the findings cap, which is not a payload-size condition"
+      },
+      {
+        "category": "design",
+        "id": "fnd-d0ae309cbc804f77",
+        "producer": "magi.melchior",
+        "severity": "minor",
+        "status": "CONFIRMED",
+        "status_reason": "all supporting claims verified",
+        "subject_id": "prop-4c779ea4f01dc091",
+        "title": "Depth-limit enforcement mechanism unspecified; YAML alias expansion unaddressed"
+      },
+      {
+        "category": "documentation",
+        "id": "fnd-d2c76aace6cc0615",
+        "producer": "doc.tech_writer",
+        "severity": "minor",
+        "status": "REFUTED",
+        "status_reason": "a supporting claim was refuted by verification",
+        "subject_id": "prop-e01963b9410d23d6",
+        "title": "No reference table of finding codes and severities is planned"
+      },
+      {
+        "category": "operations",
+        "id": "fnd-d52ef1e8b3d7e13e",
+        "producer": "magi.melchior",
+        "severity": "info",
+        "status": "CONFIRMED",
+        "status_reason": "all supporting claims verified",
+        "subject_id": "prop-e01963b9410d23d6",
+        "title": "500 response omits run_id, weakening client-side correlation"
+      },
+      {
+        "category": "tooling",
+        "id": "fnd-d628d4e7cd88533c",
+        "producer": "spec.security",
+        "severity": "minor",
+        "status": "UNRESOLVED",
+        "status_reason": "no checkable claims supplied",
+        "subject_id": "b11ba2bab7308f2e8f32205d79dcfae9e9f0f6ae",
+        "title": "Review diff is truncated: router, models, base, registry, settings and main.py were not inspectable"
+      },
+      {
+        "category": "security",
+        "id": "fnd-d6383f449c8725cf",
+        "producer": "spec.security",
+        "severity": "major",
+        "status": "UNRESOLVED",
+        "status_reason": "supporting claims could not be verified",
+        "subject_id": "prop-2e668f554d8554a3",
+        "title": "YAML depth and alias budget must abort during composition and be independently bounded"
+      },
+      {
+        "category": "operations",
+        "id": "fnd-d7483a2cc4b12c12",
+        "producer": "spec.sre",
+        "severity": "info",
+        "status": "CONFIRMED",
+        "status_reason": "all supporting claims verified",
+        "subject_id": "067510f2ab576e5680726fa3ac4298d9af4e1f47",
+        "title": "Observability reuses the existing HTTP-level instrumentator; no tool-level metric family"
+      },
+      {
+        "category": "tooling",
+        "id": "fnd-ddc0e5941a1d822c",
+        "producer": "dev.writer",
+        "severity": "minor",
+        "status": "CONFIRMED",
+        "status_reason": "all supporting claims verified",
+        "subject_id": "prop-2e668f554d8554a3",
+        "title": "No type checker is configured in the repository"
+      },
+      {
+        "category": "documentation",
+        "id": "fnd-df990edab4d3fa37",
+        "producer": "doc.tech_writer",
+        "severity": "minor",
+        "status": "REFUTED",
+        "status_reason": "a supporting claim was refuted by verification",
+        "subject_id": "prop-e01963b9410d23d6",
+        "title": "One numbered document mixes four Di\u00e1taxis modes"
+      },
+      {
+        "category": "operations",
+        "id": "fnd-e162a3181cd772a1",
+        "producer": "spec.security",
+        "severity": "minor",
+        "status": "UNRESOLVED",
+        "status_reason": "supporting claims could not be verified",
+        "subject_id": "prop-4625b0e254ff31a5",
+        "title": "CPU-bound endpoints may be unthrottled because slowapi has no middleware or per-route decorator"
+      },
+      {
+        "category": "security",
+        "id": "fnd-e1d63c0523b486c4",
+        "producer": "spec.security",
+        "severity": "major",
+        "status": "UNRESOLVED",
+        "status_reason": "supporting claims could not be verified",
+        "subject_id": "prop-4625b0e254ff31a5",
+        "title": "Payload logging must be verified against the existing request-logging middleware"
+      },
+      {
+        "category": "tooling",
+        "id": "fnd-e32385fca603cb2a",
+        "producer": "spec.qa",
+        "severity": "info",
+        "status": "UNRESOLVED",
+        "status_reason": "supporting claims could not be verified",
+        "subject_id": "prop-cfda3b8afd2a5616",
+        "title": "No explicit false-positive test for the URL/path heuristic"
+      },
+      {
+        "category": "documentation",
+        "id": "fnd-e43548e1e8e7f8a8",
+        "producer": "doc.tech_writer",
+        "severity": "minor",
+        "status": "REFUTED",
+        "status_reason": "a supporting claim was refuted by verification",
+        "subject_id": "prop-4c779ea4f01dc091",
+        "title": "One numbered document mixes four Di\u00e1taxis modes"
+      },
+      {
+        "category": "design",
+        "id": "fnd-e661b5d229abd3dd",
+        "producer": "spec.qa",
+        "severity": "minor",
+        "status": "UNRESOLVED",
+        "status_reason": "supporting claims could not be verified",
+        "subject_id": "prop-2e668f554d8554a3",
+        "title": "500 body embeds run_id inside a 'detail' string"
+      },
+      {
+        "category": "operations",
+        "id": "fnd-ec3e698f65e7da06",
+        "producer": "spec.sre",
+        "severity": "major",
+        "status": "CONFIRMED",
+        "status_reason": "all supporting claims verified",
+        "subject_id": "prop-4625b0e254ff31a5",
+        "title": "New runtime dependency PyYAML is added without a pinned version"
+      },
+      {
+        "category": "operations",
+        "id": "fnd-ec9ed173cbdbf8ed",
+        "producer": "spec.sre",
+        "severity": "minor",
+        "status": "UNRESOLVED",
+        "status_reason": "supporting claims could not be verified",
+        "subject_id": "prop-a4f87e35bf03b7a5",
+        "title": "toolbox_enabled feature flag must default to enabled"
+      },
+      {
+        "category": "design",
+        "id": "fnd-f0a8f6c7996bf233",
+        "producer": "magi.casper",
+        "severity": "minor",
+        "status": "REFUTED",
+        "status_reason": "a supporting claim was refuted by verification",
+        "subject_id": "prop-4625b0e254ff31a5",
+        "title": "json.validate URL/path heuristic risks false negatives on valid JSON"
+      },
+      {
+        "category": "operations",
+        "id": "fnd-f242d6321114b7ba",
+        "producer": "spec.sre",
+        "severity": "major",
+        "status": "CONFIRMED",
+        "status_reason": "all supporting claims verified",
+        "subject_id": "prop-4c779ea4f01dc091",
+        "title": "Prometheus metric registration must be idempotent and gated on prometheus_enabled"
+      },
+      {
+        "category": "security",
+        "id": "fnd-f29086a3f7c96f9b",
+        "producer": "spec.security",
+        "severity": "major",
+        "status": "UNRESOLVED",
+        "status_reason": "supporting claims could not be verified",
+        "subject_id": "prop-4625b0e254ff31a5",
+        "title": "json.validate rejects URL/path-like input by heuristic instead of relying on the absence of a fetch/read capability"
+      },
+      {
+        "category": "design",
+        "id": "fnd-f2eb1a0752ecc492",
+        "producer": "magi.casper",
+        "severity": "info",
+        "status": "REFUTED",
+        "status_reason": "a supporting claim was refuted by verification",
+        "subject_id": "prop-a4f87e35bf03b7a5",
+        "title": "413 reused for the findings cap is semantically 'Payload Too Large'"
+      },
+      {
+        "category": "design",
+        "id": "fnd-f35443b0ea734ad5",
+        "producer": "spec.qa",
+        "severity": "minor",
+        "status": "UNRESOLVED",
+        "status_reason": "supporting claims could not be verified",
+        "subject_id": "prop-cfda3b8afd2a5616",
+        "title": "json.validate URL/path heuristic can reject valid JSON text"
+      },
+      {
+        "category": "local_bug",
+        "id": "fnd-f53b78fb84f8dc46",
+        "producer": "magi.casper",
+        "severity": "minor",
+        "status": "REFUTED",
+        "status_reason": "a supporting claim was refuted by verification",
+        "subject_id": "prop-4c779ea4f01dc091",
+        "title": "json.validate URL/path heuristic may reject valid JSON text"
+      },
+      {
+        "category": "tooling",
+        "id": "fnd-f72491120d4a7dd2",
+        "producer": "spec.qa",
+        "severity": "minor",
+        "status": "UNRESOLVED",
+        "status_reason": "supporting claims could not be verified",
+        "subject_id": "prop-4c779ea4f01dc091",
+        "title": "Coverage table references a requirement id that does not exist"
+      },
+      {
+        "category": "tooling",
+        "id": "fnd-fc6db446a5e3f6ae",
+        "producer": "spec.qa",
+        "severity": "info",
+        "status": "CONFIRMED",
+        "status_reason": "all supporting claims verified",
+        "subject_id": "prop-4625b0e254ff31a5",
+        "title": "No dedicated regression test module for existing endpoints"
+      },
+      {
+        "category": "documentation",
+        "id": "fnd-fcb52a576ad27bd5",
+        "producer": "doc.tech_writer",
+        "severity": "minor",
+        "status": "REFUTED",
+        "status_reason": "a supporting claim was refuted by verification",
+        "subject_id": "prop-2e668f554d8554a3",
+        "title": "Documentation plan does not explicitly cover run_id correlation-only semantics"
+      },
+      {
+        "category": "operations",
+        "id": "fnd-fce752f536ef606d",
+        "producer": "spec.sre",
+        "severity": "major",
+        "status": "CONFIRMED",
+        "status_reason": "all supporting claims verified",
+        "subject_id": "prop-2e668f554d8554a3",
+        "title": "PyYAML is a hard application-startup dependency"
+      },
+      {
+        "category": "design",
+        "id": "fnd-fcfc1bc7249ad2bb",
+        "producer": "magi.casper",
+        "severity": "minor",
+        "status": "REFUTED",
+        "status_reason": "a supporting claim was refuted by verification",
+        "subject_id": "prop-2e668f554d8554a3",
+        "title": "outcome=fail on warning findings conflates missing with risky configuration"
+      },
+      {
+        "category": "operations",
+        "id": "fnd-ff799841c5f1deb0",
+        "producer": "spec.sre",
+        "severity": "minor",
+        "status": "CONFIRMED",
+        "status_reason": "all supporting claims verified",
+        "subject_id": "prop-a4f87e35bf03b7a5",
+        "title": "Timed-out executor task keeps running after the response"
+      }
+    ],
+    "notice": "",
+    "outcome": {
+      "baseline_commit": "d6151214c22ebe87c12901fa3c523b7fc08f7938",
+      "change_level": "verified",
+      "diagnosis": "all mandatory gates passed on the final candidate (verified change only; not integrated or deployed)",
+      "diff_ref": "artifacts/candidate.patch",
+      "documentation_refs": [
+        "docs/14-dev-sre-toolbox.md"
+      ],
+      "evidence_refs": [
+        "gate-346717925853764a",
+        "gate-a864313470e0981e",
+        "gate-cca075f5440f7e38",
+        "gate-1c3c8fbc2b20fbdd",
+        "gate-78b8817b4aebb41e",
+        "gate-00c12993d8a4d5f8",
+        "gate-648292d1ca9da807",
+        "gate-d13c463ac79a4467",
+        "gate-a788caa514bed869"
+      ],
+      "final_commit": "067510f2ab576e5680726fa3ac4298d9af4e1f47",
+      "gate_checks": [
+        {
+          "candidate_commit": "067510f2ab576e5680726fa3ac4298d9af4e1f47",
+          "detail": "exit 0\n--- stdout ---\n\n--- stderr ---\n",
+          "evidence_ref": "gate-346717925853764a",
+          "mandatory": true,
+          "name": "project.build",
+          "verdict": "PASS"
+        },
+        {
+          "candidate_commit": "067510f2ab576e5680726fa3ac4298d9af4e1f47",
+          "detail": "exit 0\n--- stdout ---\n\u001b[33ms\u001b[0m\u001b[33ms\u001b[0m\u001b[33ms\u001b[0m\u001b[33ms\u001b[0m\u001b[33ms\u001b[0m\u001b[33ms\u001b[0m\u001b[33ms\u001b[0m\u001b[33ms\u001b[0m\u001b[33ms\u001b[0m\u001b[33ms\u001b[0m\u001b[33ms\u001b[0m\u001b[33ms\u001b[0m\u001b[33ms\u001b[0m\u001b[33ms\u001b[0m\u001b[33ms\u001b[0m\u001b[33ms\u001b[0m\u001b[33ms\u001b[0m\u001b[33ms\u001b[0m\u001b[33ms\u001b[0m\u001b[33ms\u001b[0m\u001b[33ms\u001b[0m\u001b[33ms\u001b[0m\u001b[33ms\u001b[0m\u001b[33ms\u001b[0m\u001b[33ms\u001b[0m\u001b[32m.\u001b[0m\u001b[32m.\u001b[0m\u001b[32m.\u001b[0m\u001b[32m.\u001b[0m\u001b[32m.\u001b[0m\u001b[32m.\u001b[0m\u001b[32m.\u001b[0m\u001b[32m.\u001b[0m\u001b[32m.\u001b[0m\u001b[32m.\u001b[0m\u001b[32m.\u001b[0m\u001b[32m.\u001b[0m\u001b[32m.\u001b[0m\u001b[32m.\u001b[0m\u001b[32m.\u001b[0m\u001b[32m.\u001b[0m\u001b[32m.\u001b[0m\u001b[32m.\u001b[0m\u001b[32m.\u001b[0m\u001b[32m.\u001b[0m\u001b[32m.\u001b[0m\u001b[32m.\u001b[0m\u001b[32m.\u001b[0m\u001b[32m.\u001b[0m\u001b[32m.\u001b[0m\u001b[32m.\u001b[0m\u001b[32m.\u001b[0m\u001b[32m.\u001b[0m\u001b[32m.\u001b[0m\u001b[32m.\u001b[0m\u001b[32m.\u001b[0m\u001b[32m.\u001b[0m\u001b[32m.\u001b[0m\u001b[32m.\u001b[0m\u001b[32m.\u001b[0m\u001b[32m.\u001b[0m\u001b[32m.\u001b[0m\u001b[32m.\u001b[0m\u001b[32m.\u001b[0m\u001b[32m.\u001b[0m\u001b[32m.\u001b[0m\u001b[32m.\u001b[0m\u001b[32m.\u001b[0m\u001b[32m.\u001b[0m\u001b[32m.\u001b[0m\u001b[32m.\u001b[0m\u001b[32m.\u001b[0m\u001b[33m [ 45%]\r\n\u001b[0m\u001b[32m.\u001b[0m\u001b[32m.\u001b[0m\u001b[32m.\u001b[0m\u001b[32m.\u001b[0m\u001b[32m.\u001b[0m\u001b[32m.\u001b[0m\u001b[32m.\u001b[0m\u001b[32m.\u001b[0m\u001b[32m.\u001b[0m\u001b[32m.\u001b[0m\u001b[32m.\u001b[0m\u001b[32m.\u001b[0m\u001b[32m.\u001b[0m\u001b[32m.\u001b[0m\u001b[32m.\u001b[0m\u001b[32m.\u001b[0m\u001b[32m.\u001b[0m\u001b[32m.\u001b[0m\u001b[32m.\u001b[0m\u001b[32m.\u001b[0m\u001b[32m.\u001b[0m\u001b[32m.\u001b[0m\u001b[32m.\u001b[0m\u001b[32m.\u001b[0m",
+          "evidence_ref": "gate-a864313470e0981e",
+          "mandatory": true,
+          "name": "project.test",
+          "verdict": "PASS"
+        },
+        {
+          "candidate_commit": "067510f2ab576e5680726fa3ac4298d9af4e1f47",
+          "detail": "exit 0\n--- stdout ---\n0\r\n\n--- stderr ---\n",
+          "evidence_ref": "gate-cca075f5440f7e38",
+          "mandatory": true,
+          "name": "project.lint",
+          "verdict": "PASS"
+        },
+        {
+          "candidate_commit": "067510f2ab576e5680726fa3ac4298d9af4e1f47",
+          "detail": "9 acceptance scenario(s) passed; QA review without confirmed blockers",
+          "evidence_ref": "gate-1c3c8fbc2b20fbdd",
+          "mandatory": true,
+          "name": "qa.acceptance",
+          "verdict": "PASS"
+        },
+        {
+          "candidate_commit": "067510f2ab576e5680726fa3ac4298d9af4e1f47",
+          "detail": "review completed; 7 finding(s), none confirmed blocking",
+          "evidence_ref": "gate-78b8817b4aebb41e",
+          "mandatory": true,
+          "name": "security.review",
+          "verdict": "PASS"
+        },
+        {
+          "candidate_commit": "067510f2ab576e5680726fa3ac4298d9af4e1f47",
+          "detail": "review completed; 3 finding(s), none confirmed blocking",
+          "evidence_ref": "gate-00c12993d8a4d5f8",
+          "mandatory": true,
+          "name": "sre.review",
+          "verdict": "PASS"
+        },
+        {
+          "candidate_commit": "067510f2ab576e5680726fa3ac4298d9af4e1f47",
+          "detail": "documentation updated: ['docs/14-dev-sre-toolbox.md']",
+          "evidence_ref": "",
+          "mandatory": true,
+          "name": "docs.updated",
+          "verdict": "PASS"
+        },
+        {
+          "candidate_commit": "067510f2ab576e5680726fa3ac4298d9af4e1f47",
+          "detail": "three final reviews completed; 21 finding(s), none confirmed blocking",
+          "evidence_ref": "gate-648292d1ca9da807",
+          "mandatory": true,
+          "name": "magi.final_review",
+          "verdict": "PASS"
+        },
+        {
+          "candidate_commit": "067510f2ab576e5680726fa3ac4298d9af4e1f47",
+          "detail": "no protected change",
+          "evidence_ref": "gate-d13c463ac79a4467",
+          "mandatory": true,
+          "name": "integrity.protected_paths",
+          "verdict": "PASS"
+        },
+        {
+          "candidate_commit": "067510f2ab576e5680726fa3ac4298d9af4e1f47",
+          "detail": "all changes inside authorized scopes",
+          "evidence_ref": "gate-a788caa514bed869",
+          "mandatory": true,
+          "name": "scope.write_scopes",
+          "verdict": "PASS"
+        }
+      ],
+      "patch_ref": "artifacts/candidate.patch",
+      "plan_version": 1,
+      "publications": [
+        {
+          "dedup_key": "export_patch:run-20261017-155113:067510f2ab576e5680726fa3ac4298d9af4e1f47",
+          "location": "artifacts/candidate.patch",
+          "operation": "export_patch",
+          "performed": true
+        },
+        {
+          "dedup_key": "local_branch:run-20261017-155113:067510f2ab576e5680726fa3ac4298d9af4e1f47",
+          "location": "run-20261017-155113/workspace#magi/run-20261017-155113",
+          "operation": "local_branch",
+          "performed": true
+        }
+      ],
+      "run_id": "run-20261017-155113",
+      "status": "SUCCESS",
+      "target_identity": "fastapi-agentcore"
+    },
+    "project_config": {
+      "config": {
+        "code_paths": [
+          "**"
+        ],
+        "commands": {
+          "build": {
+            "run": "python -m compileall -q app",
+            "timeout_seconds": null
+          },
+          "lint": {
+            "run": "python -m flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics",
+            "timeout_seconds": null
+          },
+          "test": {
+            "run": "python -m pytest -q",
+            "timeout_seconds": null
+          }
+        },
+        "container_image": "",
+        "doc_conventions": "",
+        "doc_paths": [
+          "docs/**",
+          "README.md",
+          "CHANGELOG.md"
+        ],
+        "generated_paths": [],
+        "languages": [
+          "python"
+        ],
+        "not_applicable": {},
+        "services": [],
+        "test_paths": [],
+        "version": 1,
+        "write_scopes": []
+      },
+      "denied_commands": {},
+      "inferred": [],
+      "source": "file",
+      "warnings": []
+    },
+    "routing": [
+      {
+        "from": "intake",
+        "reason": "snapshot ready",
+        "to": "magi"
+      },
+      {
+        "from": "magi_select",
+        "reason": "revise",
+        "round": 0,
+        "to": "magi_begin"
+      },
+      {
+        "from": "magi",
+        "reason": "plan prop-2e668f554d8554a3",
+        "round": 1,
+        "to": "implementation"
+      },
+      {
+        "commit": "ef52d6722f45524eef7125c1866c5c023e1adbc3",
+        "from": "dev.writer",
+        "step": "dev.writer:p1:c0",
+        "to": "next"
+      },
+      {
+        "commit": "b11ba2bab7308f2e8f32205d79dcfae9e9f0f6ae",
+        "from": "dev.pair",
+        "step": "dev.pair:p1:c0",
+        "to": "next"
+      },
+      {
+        "commit": "b11ba2bab7308f2e8f32205d79dcfae9e9f0f6ae",
+        "from": "triage",
+        "to": "verify"
+      },
+      {
+        "commit": "b11ba2bab7308f2e8f32205d79dcfae9e9f0f6ae",
+        "from": "triage",
+        "to": "docs"
+      },
+      {
+        "commit": "067510f2ab576e5680726fa3ac4298d9af4e1f47",
+        "from": "tech_writer",
+        "to": "triage"
+      },
+      {
+        "commit": "067510f2ab576e5680726fa3ac4298d9af4e1f47",
+        "from": "triage",
+        "to": "verify"
+      },
+      {
+        "commit": "067510f2ab576e5680726fa3ac4298d9af4e1f47",
+        "from": "triage",
+        "to": "final_review"
+      },
+      {
+        "commit": "067510f2ab576e5680726fa3ac4298d9af4e1f47",
+        "from": "triage",
+        "to": "gate"
+      },
+      {
+        "from": "gate",
+        "status": "SUCCESS",
+        "to": "end"
+      }
+    ],
+    "selected_plan": "prop-2e668f554d8554a3",
+    "target": {
+      "baseline_commit": "d6151214c22ebe87c12901fa3c523b7fc08f7938",
+      "identity": "fastapi-agentcore",
+      "locator": "https://github.com/lorenzogirardi/fastapi-agentcore.git",
+      "resolved_commit": "d6151214c22ebe87c12901fa3c523b7fc08f7938"
+    },
+    "unverified_candidate": null,
+    "versions": {
+      "control_fingerprint": "42fde987348b40ba5de8967f1ee6e239b415d0d56c751f7112f763ef66137e12",
+      "platform": {
+        "commit": "f872ae3-dirty@1ff47e162530",
+        "src_dirty": null,
+        "version": "unknown"
+      },
+      "policy": {
+        "profile": "agentcore",
+        "sha256": "1e6b57dfc41824b76511444eb7dcdb43e4b62c9a7b72d00839abf47313fd3ddb",
+        "version": "2026.10.1"
+      },
+      "prompts": {
+        "_common": "_common@v1#b9809c53ced6",
+        "dev_pair": "dev_pair@v1#6953b2642adc",
+        "dev_pair_assessment": "dev_pair_assessment@v1#ce4bb680acdb",
+        "dev_writer": "dev_writer@v1#15b6cee41209",
+        "magi_analysis": "magi_analysis@v2#5e3b2a345b5b",
+        "magi_cross_review": "magi_cross_review@v1#d7f67f496b97",
+        "magi_final_review": "magi_final_review@v1#df8adba1db74",
+        "magi_proposal": "magi_proposal@v1#e83918486511",
+        "preventive_review": "preventive_review@v2#bff56d57d6a3",
+        "specialist_review": "specialist_review@v2#384f40cee8e2",
+        "tech_writer": "tech_writer@v1#529a938739aa"
+      }
+    }
+  },
+  "unverified_patch": ""
+}

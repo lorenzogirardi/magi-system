@@ -13,6 +13,7 @@ import urllib.error
 import urllib.request
 
 from magi_system.llm.base import ModelProviderError, ModelRequest, ModelResponse, ModelTimeout
+from magi_system.models.run import ModelPrice
 
 
 class AnthropicAdapter:
@@ -79,7 +80,7 @@ class OpenRouterAdapter:
 
     def __init__(
         self, model: str, *, temperature: float = 0.0, max_output_tokens: int = 8192,
-        routing: dict | None = None, reasoning: dict | None = None,
+        routing: dict | None = None, reasoning: dict | None = None, price: ModelPrice | None = None,
     ) -> None:
         if not os.environ.get("OPENROUTER_API_KEY"):
             raise ModelProviderError("OPENROUTER_API_KEY is not set")
@@ -89,6 +90,7 @@ class OpenRouterAdapter:
         self.max_output_tokens = max_output_tokens
         self.routing = routing or {}
         self.reasoning = reasoning
+        self.price = price
 
     def complete(self, request: ModelRequest, *, timeout: float) -> ModelResponse:
         body = {
@@ -140,21 +142,32 @@ class OpenRouterAdapter:
             text=choice["message"].get("content") or "",
             input_tokens=usage.get("prompt_tokens"),
             output_tokens=usage.get("completion_tokens"),
-            cost_usd=usage.get("cost"),
+            cost_usd=computed_cost(self.price, usage) if self.price else usage.get("cost"),
             model=data.get("model", self.model),
             truncated=choice.get("finish_reason") == "length",
+            provider_cost_usd=usage.get("cost"),
         )
+
+
+def computed_cost(price: ModelPrice, usage: dict) -> float | None:
+    """Cost of one call from a configured price; None when the provider reports no token usage."""
+    prompt, completion = usage.get("prompt_tokens"), usage.get("completion_tokens")
+    if prompt is None or completion is None:
+        return None
+    cached = min((usage.get("prompt_tokens_details") or {}).get("cached_tokens") or 0, prompt)
+    cached_rate = price.input_per_mtok if price.cached_input_per_mtok is None else price.cached_input_per_mtok
+    return ((prompt - cached) * price.input_per_mtok + cached * cached_rate + completion * price.output_per_mtok) / 1_000_000
 
 
 def make_adapter(
     provider: str, model: str, *, temperature: float, max_output_tokens: int,
-    routing: dict | None = None, reasoning: dict | None = None,
+    routing: dict | None = None, reasoning: dict | None = None, price: ModelPrice | None = None,
 ):
     if provider == "anthropic":
-        if routing or reasoning:
-            raise ModelProviderError("'routing' and 'reasoning' are supported only by provider 'openrouter'")
+        if routing or reasoning or price:
+            raise ModelProviderError("'routing', 'reasoning' and 'price' are supported only by provider 'openrouter'")
         return AnthropicAdapter(model, temperature=temperature, max_output_tokens=max_output_tokens)
     if provider == "openrouter":
         return OpenRouterAdapter(model, temperature=temperature, max_output_tokens=max_output_tokens,
-                                 routing=routing, reasoning=reasoning)
+                                 routing=routing, reasoning=reasoning, price=price)
     raise ModelProviderError(f"unknown provider {provider!r}")

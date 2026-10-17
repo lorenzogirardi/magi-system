@@ -1,0 +1,41 @@
+== clone https://github.com/lorenzogirardi/fastapi-agentcore.git @ d6151214c22ebe87c12901fa3c523b7fc08f7938
+ app/toolbox/__init__.py             |  36 +++
+ app/toolbox/base.py                 | 104 ++++++
+ app/toolbox/registry.py             |  35 ++
+ app/toolbox/tools/__init__.py       |   1 +
+ app/toolbox/tools/json_validate.py  |  85 +++++
+ app/toolbox/tools/k8s_manifest.py   | 617 ++++++++++++++++++++++++++++++++++++
+ app/toolbox/tools/text_diff.py      |  93 ++++++
+ docs/14-dev-sre-toolbox.md          | 302 ++++++++++++++++++
+ docs/README.md                      |   1 +
+ requirements.txt                    |   3 +
+ tests/test_toolbox_api.py           | 169 ++++++++++
+ tests/test_toolbox_json_validate.py |  68 ++++
+ tests/test_toolbox_k8s.py           | 323 +++++++++++++++++++
+ tests/test_toolbox_text_diff.py     |  61 ++++
+ 21 files changed, 2329 insertions(+), 49 deletions(-)
+== tests: python -m pytest -q
+sssssssssssssssssssssssss............................................... [ 45%]
+........................................................................ [ 91%]
+..............                                                           [100%]
+133 passed, 25 skipped in 2.32s
+== build Dockerfile
+== run on http://localhost:18000
+-- GET /api/toolbox/tools -> 200
+{"tools":[{"id":"json.validate","description":"Validate inline JSON text. Returns the parsed value, or a syntax error with its position when available. URLs and file paths are not accepted.","version":"1.0.0","input_schema":{"description":"Input schema for json.validate.","properties":{"text":{"description":"Inline JSON text to validate. URLs and file paths are not accepted: the value is parsed as-is and never dereferenced.","title":"Text","type":"string"}},"required":["text"],"title":"JsonValidateInput","type":"object"}},{"id":"text.diff","description":"Return a unified diff between two inlin
+-- POST /api/toolbox/runs -> 200
+{"run_id":"fe556f37-9dc8-4c26-9202-e86dcdbce159","tool":"json.validate","tool_version":"1.0.0","status":"completed","outcome":"pass","summary":{"info":0,"warning":0,"error":0},"findings":[],"output":{"valid":true,"value":{"a":1}},"duration_ms":0}
+-- POST /api/toolbox/runs -> 200
+{"run_id":"5dd86719-c199-4603-a8d1-1f2991a55a18","tool":"text.diff","tool_version":"1.0.0","status":"completed","outcome":"pass","summary":{"info":1,"warning":0,"error":0},"findings":[{"code":"TEXT_DIFF_DIFFERENT","severity":"info","category":"informational","message":"The two inputs differ.","location":{"document_index":null,"resource_kind":null,"resource_name":null,"path":"left/right"},"suggestion":null}],"output":{"identical":false,"diff":"--- left\n+++ right\n@@ -1,2 +1,2 @@\n a\n-b\n+c","added_lines":1,"removed_lines":1},"duration_ms":13}
+-- POST /api/toolbox/runs -> 200
+{"run_id":"65043416-8cdc-473f-b67c-a6134466cf59","tool":"k8s.manifest.inspect","tool_version":"1.0.0","status":"completed","outcome":"fail","summary":{"info":0,"warning":7,"error":0},"findings":[{"code":"K8S_MISSING_RESOURCE_REQUESTS","severity":"warning","category":"missing_configuration","message":"Container 'app' does not declare resource requests.","location":{"document_index":0,"resource_kind":"Deployment","resource_name":"example","path":"spec.template.spec.containers[0].resources.requests"},"suggestion":"Declare CPU/memory requests so the scheduler can place the pod."},{"code":"K8S_MISS
+
+== summary
+PASS  patch applies to d6151214c22ebe87c12901fa3c523b7fc08f7938
+PASS  tests: python -m pytest -q
+PASS  docker build (Dockerfile)
+PASS  container answers on /api/mgmt/ready (200)
+PASS  GET /api/toolbox/tools (200)
+PASS  POST /api/toolbox/runs (200)
+PASS  POST /api/toolbox/runs (200)
+PASS  POST /api/toolbox/runs (200)

@@ -39,8 +39,22 @@ Mandatory gates (`policy.mandatory_gates`): `project.build`, `project.test`,
 `project.lint`, `qa.acceptance`, `security.review`, `sre.review`, `docs.updated`,
 `magi.final_review`, `integrity.protected_paths`, `scope.write_scopes`.
 
-`qa.acceptance` needs at least one executed acceptance command: QA review alone is
+`qa.acceptance` needs at least one acceptance command that PASSED when executed: QA review alone is
 UNKNOWN. A project command that is missing or denied by policy makes its gate UNKNOWN.
+
+Acceptance scenarios are written by the QA agent from the request, before the code exists, so some are wrong.
+A wrong scenario must not decide the run, and the verdict must never be an opinion:
+
+- A scenario that fails but only **searches source text** (`grep`, or files read through a glob; AST checks do
+  not count) or is a `pytest` that **selected no tests** (exit code 5) is recorded `NOT_APPLICABLE`
+  ("advisory"), with the matched lines in the check. It is reported and does not count for or against
+  (`engine/gates.py: scenario_verdict`, event `scenario_advisory`).
+- In its review of the candidate the QA sees which scenarios failed and may return a **corrected scenario with the
+  same id** (`CandidateReviewDraft.acceptance_scenarios`). It must be accepted (the scenario FAILED, the command
+  differs and passes the command policy), is allowed **once per scenario**, and is **executed**: the verdict is
+  that of the execution. The old and new commands are in the event `scenario_amended`, the old scenario is marked
+  `superseded`, and `qa.acceptance` says which scenarios were corrected (`nodes_verify.py: pick_scenario_rewrites`).
+- A real failure still blocks, and a corrected scenario that fails again is a real failure.
 
 ## Terminal states
 
@@ -48,7 +62,7 @@ UNKNOWN. A project command that is missing or denied by policy makes its gate UN
 |---|---|
 | `SUCCESS` | Every mandatory gate PASS or allowed N/A on the final candidate, control plane unchanged. Means *verified change*, not merged or deployed. |
 | `FAILED_VERIFICATION` | A mandatory gate not passed, fix attempts exhausted, or no admissible plan for factual reasons. |
-| `UNRESOLVED_REQUIREMENT` | No traceable mandatory requirement, unresolved critical unknowns, or escalation with no architecture rounds left. |
+| `UNRESOLVED_REQUIREMENT` | No traceable mandatory requirement, unresolved critical unknowns, escalation with no architecture rounds left, or **preflight**: a mandatory project gate (`project.build`/`test`/`lint`) has no command, a denied command, and no allowed `not_applicable` with a reason. The preflight runs at intake, before any model call (cost 0); the diagnosis says what to add to `.magi/config.yaml` (the target needs one when it has no Makefile/package.json scripts). |
 | `POLICY_DENIED` | Target config tries to change authorization or is malformed; protected path changed; control plane modified during the run. |
 | `INFRA_FAILURE` | Agent failures beyond technical retries, Git/filesystem errors, crash (resumable). |
 | `BUDGET_EXHAUSTED` | Any budget dimension, remediation cycles, or the graph step limit. |

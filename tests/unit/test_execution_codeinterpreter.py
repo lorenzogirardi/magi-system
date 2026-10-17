@@ -3,6 +3,7 @@
 import pytest
 
 from magi_system.execution import CodeInterpreterRunner, make_runner
+from magi_system.execution.runner import ToolchainError
 from magi_system.policy import PolicyEngine
 
 ENV = {
@@ -80,8 +81,9 @@ def test_runs_command_in_per_run_sandbox(ws):
     assert fs["efsConfiguration"]["accessPointArn"] == "arn:ap/1" and fs["efsConfiguration"]["mountPath"] == "/mnt/ws"
     cmd = ac.invocations[0]["arguments"]["command"]
     assert ac.invocations[0]["name"] == "executeCommand"
-    assert cmd.startswith("cd /mnt/ws && exec env -i PATH=/mnt/ws/.toolchain/bin:/usr/bin:/bin HOME=/tmp")
-    assert cmd.endswith("timeout -k 5 300 sh ok.sh")
+    assert cmd.startswith("cd /mnt/ws && exec env -i PATH=/mnt/ws/.toolchain/bin:/usr/bin:/bin "
+                          "PYTHONPATH=/mnt/ws/.git/magi-toolchain/site HOME=/tmp")
+    assert cmd.endswith("timeout -k 5 300 sh ok.sh < /dev/null")  # closed stdin: a command reading it must not hang
 
 
 def test_session_and_access_point_are_reused(ws):
@@ -104,7 +106,7 @@ def test_existing_access_point_for_run_is_reused_on_resume(ws):
 def test_arguments_are_shell_quoted(ws):
     r, ac, _ = runner(ws)
     r.run(["python", "-c", "print('a; rm -rf ~')"], cwd=ws)
-    assert ac.invocations[0]["arguments"]["command"].endswith("""python -c 'print('"'"'a; rm -rf ~'"'"')'""")
+    assert ac.invocations[0]["arguments"]["command"].endswith("""python -c 'print('"'"'a; rm -rf ~'"'"')' < /dev/null""")
 
 
 def test_denied_command_never_reaches_the_sandbox(ws):
@@ -172,3 +174,113 @@ def test_agentcore_profile_allows_only_code_interpreter(ws):
     for other in ("local", "container"):
         with pytest.raises(PermissionError):
             make_runner(policy, ws, runner=other)
+
+
+# -- toolchain: the target's wheels are installed from the runtime, the sandbox has no internet --------
+
+
+class FakeUv:
+    def __init__(self, code=0, stderr=""):
+        self.calls, self.code, self.stderr = [], code, stderr
+
+    def __call__(self, cmd, **kw):
+        self.calls.append(cmd)
+        if self.code == 0:
+            site = cmd[cmd.index("--target") + 1]
+            (__import__("pathlib").Path(site) / "pytest").mkdir()
+        return __import__("types").SimpleNamespace(returncode=self.code, stdout="", stderr=self.stderr)
+
+
+def _req(ws, text="fastapi==0.1\n# comment\npytest>=8\n", name="requirements.txt"):
+    (ws / name).write_text(text)
+    return [name]
+
+
+def test_toolchain_installs_wheels_for_the_sandbox_platform(ws, monkeypatch):
+    uv = FakeUv()
+    monkeypatch.setattr("magi_system.execution.runner.subprocess.run", uv)
+    r, _, _ = runner(ws)
+    (ws / ".git").mkdir()
+    r.prepare_toolchain(_req(ws))
+    cmd = uv.calls[0]
+    assert cmd[:3] == ["uv", "pip", "install"] and "--only-binary" in cmd and ":all:" in cmd
+    assert cmd[cmd.index("--python-platform") + 1] == "aarch64-manylinux_2_28"
+    assert cmd[cmd.index("--python-version") + 1] == "3.12"
+    assert cmd[cmd.index("--target") + 1] == str(ws.resolve() / ".git" / "magi-toolchain" / "site")
+    assert cmd[-1] == "pytest" and str(ws.resolve() / "requirements.txt") in cmd
+
+
+def test_toolchain_is_idempotent_and_reinstalls_when_requirements_change(ws, monkeypatch):
+    uv = FakeUv()
+    monkeypatch.setattr("magi_system.execution.runner.subprocess.run", uv)
+    r, _, _ = runner(ws)
+    req = _req(ws)
+    r.prepare_toolchain(req)
+    r.prepare_toolchain(req)
+    assert len(uv.calls) == 1
+    _req(ws, "fastapi==0.2\n")
+    r.prepare_toolchain(req)
+    assert len(uv.calls) == 2
+
+
+def test_toolchain_failure_carries_the_installer_output(ws, monkeypatch):
+    monkeypatch.setattr("magi_system.execution.runner.subprocess.run", FakeUv(code=1, stderr="no wheel for foo"))
+    r, _, _ = runner(ws)
+    with pytest.raises(ToolchainError, match="exit 1.*no wheel for foo"):
+        r.prepare_toolchain(_req(ws))
+    assert not (ws / ".git" / "magi-toolchain" / "requirements.sha256").exists()  # a failed install is retried
+
+
+@pytest.mark.parametrize("line", ["-r other.txt", "--index-url https://evil.example/simple", "pkg @ https://x/y.whl",
+                                  "git+https://github.com/a/b", "./local", "/abs/path", "-e ."])
+def test_toolchain_rejects_option_and_url_lines(ws, monkeypatch, line):
+    uv = FakeUv()
+    monkeypatch.setattr("magi_system.execution.runner.subprocess.run", uv)
+    r, _, _ = runner(ws)
+    with pytest.raises(ToolchainError, match="unsupported requirement line"):
+        r.prepare_toolchain(_req(ws, f"fastapi==0.1\n{line}\n"))
+    assert not uv.calls
+
+
+def test_toolchain_requirements_must_be_inside_the_repository(ws, tmp_path):
+    (tmp_path / "outside.txt").write_text("x\n")
+    r, _, _ = runner(ws)
+    for rel in ("../../../outside.txt", "missing.txt"):
+        with pytest.raises(ToolchainError, match="not a file inside the repository"):
+            r.prepare_toolchain([rel])
+
+
+def test_no_requirements_is_a_noop_and_other_runners_refuse(ws, monkeypatch):
+    uv = FakeUv()
+    monkeypatch.setattr("magi_system.execution.runner.subprocess.run", uv)
+    runner(ws)[0].prepare_toolchain([])
+    assert not uv.calls
+    local = make_runner(PolicyEngine("offline-test"), ws, runner="local")
+    local.prepare_toolchain([])
+    with pytest.raises(ToolchainError, match="only by the codeinterpreter runner"):
+        local.prepare_toolchain(["requirements.txt"])
+    with pytest.raises(ToolchainError, match="only by the codeinterpreter runner"):
+        local.prepare_toolchain([], ["flake8"])
+
+
+def test_extra_packages_are_installed_and_part_of_the_idempotence_key(ws, monkeypatch):
+    uv = FakeUv()
+    monkeypatch.setattr("magi_system.execution.runner.subprocess.run", uv)
+    r, _, _ = runner(ws)
+    req = _req(ws)
+    r.prepare_toolchain(req, ["flake8==7.1.0"])
+    assert uv.calls[0][-2:] == ["pytest", "flake8==7.1.0"]
+    r.prepare_toolchain(req, ["flake8==7.1.0"])
+    assert len(uv.calls) == 1
+    r.prepare_toolchain(req, ["flake8==7.1.0", "black"])
+    assert len(uv.calls) == 2
+
+
+def test_packages_alone_need_no_requirements_file_and_reject_options(ws, monkeypatch):
+    uv = FakeUv()
+    monkeypatch.setattr("magi_system.execution.runner.subprocess.run", uv)
+    r, _, _ = runner(ws)
+    r.prepare_toolchain([], ["flake8"])
+    assert uv.calls and uv.calls[0][-2:] == ["pytest", "flake8"]
+    with pytest.raises(ToolchainError, match="unsupported requirement line"):
+        r.prepare_toolchain([], ["--index-url=https://evil.example/simple"])

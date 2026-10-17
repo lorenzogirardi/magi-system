@@ -11,8 +11,7 @@ NAME=magi-agentcore-smoke
 PORT=${PORT:-18080}
 RUNTIME=${RUNTIME:-$(command -v podman || command -v docker)}
 
-"$RUNTIME" build --platform linux/arm64 -f deploy/agentcore/Dockerfile \
-  --build-arg MAGI_PLATFORM_REF="$(git rev-parse HEAD 2>/dev/null || echo unknown)" -t "$IMAGE" .
+"$RUNTIME" build --platform linux/arm64 -f deploy/agentcore/Dockerfile -t "$IMAGE" .
 
 # The demo target is a Makefile project. In production target commands run in the Code
 # Interpreter, never in this image; for the local smoke run (LocalRunner) add `make` in a
@@ -25,8 +24,10 @@ cleanup() { "$RUNTIME" rm -f "$NAME" >/dev/null 2>&1 || true; }
 trap cleanup EXIT
 cleanup
 
-# Same server and dispatcher as production; only the models are the scripted offline ones.
+# Same server and dispatcher as production; only the models are the scripted offline ones. The image has no
+# magi-system code (production loads a bundle from S3): the working tree is mounted read-only instead.
 "$RUNTIME" run -d --name "$NAME" -p "127.0.0.1:$PORT:8080" \
+  -v "$PWD/src:/opt/magi/src:ro" -e PYTHONPATH=/opt/magi/src \
   -e MAGI_STORE=sqlite -e MAGI_RUNS_ROOT=/tmp/runs \
   -e MAGI_ALLOWED_PROFILES=offline-test -e MAGI_ALLOWED_PROVIDERS=fake \
   --entrypoint python "$TEST_IMAGE" -c '

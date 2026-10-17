@@ -1,6 +1,6 @@
 # Security model on AgentCore
 
-[Overview](README.md) · [API](api.md) · [Configuration](configuration.md) · [Security](security.md) · [Limits & costs](limits-and-costs.md) · [Deploy](deploy.md) · [Testing](testing.md)
+[Overview](README.md) · [API](api.md) · [Configuration](configuration.md) · [Security](security.md) · [Limits & costs](limits-and-costs.md) · [Deploy](deploy.md) · [Testing](testing.md) · [Observability](observability.md)
 
 The rules in [the platform security model](../security.md) all still apply. These things differ:
 
@@ -16,9 +16,15 @@ The rules in [the platform security model](../security.md) all still apply. Thes
   - The command policy (allowlist, denylist, working directory inside the workspace) is
     checked **before** anything is sent. A denied command never reaches the sandbox.
   - The runner stops the session and deletes the access point at the end of the run.
-- **Orchestrator.** The runtime image contains magi-system only. The control plane (code,
-  prompts, policy) is in the image, never on EFS, so agents cannot change it. The
-  fingerprint check still runs at the gate.
+- **Orchestrator.** The control plane (code, prompts, policy) is a **code bundle in a private S3
+  bucket**, never on EFS, so agents cannot change it: the runtime role has `s3:GetObject` on
+  `code/*` only, and the sandbox role has no S3 access. At session start `bootstrap.py` reads
+  `code/current.json`, checks the bundle's **sha256** and the hash of the locked dependencies, and
+  refuses a bundle that does not match. The base image holds no magi-system code. Whoever can write to
+  the bucket can run code in the orchestrator (it holds the OpenRouter key and the runtime role), so
+  write access belongs to the person deploying, with their own AWS credentials; the bucket is
+  versioned and encrypted, and `push_code.py --rollback` restores an earlier version. The fingerprint
+  check still runs at the gate.
 - **Profiles and providers.** Callers can request only the profiles in
   `MAGI_ALLOWED_PROFILES`. This prevents asking for `offline-test` (LocalRunner, no sandbox)
   next to the API key. Every agent's provider must be in `MAGI_ALLOWED_PROVIDERS`

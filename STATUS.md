@@ -137,7 +137,7 @@ Done, all offline (no AWS calls, no real LLM):
   podman build + real HTTP contract, start → HealthyBusy → SUCCESS → Healthy → report. **Passed.**
 - `deploy/agentcore/terraform/`:
   - VPC `vpc-lab-ai-001` (`vpc_name` variable; private subnets with NAT for the runtime, isolated
-    subnets for the sandbox). Target account/Region: 170674040462 / `eu-north-1` (AgentCore APIs answer).
+    subnets for the sandbox). Target account/Region: <aws-account-id> / `eu-north-1` (AgentCore APIs answer).
     `nat_enabled` + `deploy/agentcore/nat.sh stop|start|status` switch off the only hourly cost (NAT + EIP).
     Installed Terraform is 1.5.7, the module needs >= 1.9: upgrade before validate/plan.
   - EFS, DynamoDB, S3, ECR, Secrets Manager
@@ -145,10 +145,46 @@ Done, all offline (no AWS calls, no real LLM):
   - `aws_bedrockagentcore_agent_runtime` + `aws_bedrockagentcore_code_interpreter` (provider aws 6.69.1)
   - `fmt -check` and `validate` pass. **Deployed 2026-10-16** in `eu-north-1` (VPC, NAT, ECR image
     `magi-agentcore:1ed5c87`, EFS, DynamoDB, S3, IAM, Code Interpreter, Runtime `READY`; OpenRouter key set).
-    No run started yet: the spike checklist (`docs/agentcore/testing.md`) is next. NAT is billed hourly:
-    stop it with `deploy/agentcore/nat.sh stop` when idle.
+    NAT is billed hourly: stop it with `deploy/agentcore/nat.sh stop` when idle.
+  - First real run (run-20261016-203939, fastapi-agentcore, stopped by hand at ~$1.10 reported): it
+    reached `dev_pair`. Findings: the sandbox has Python 3.12 only under `/opt/amazon/genesis1p-tools/venv/bin`,
+    no pytest, no git, no internet, aarch64, uid 991; `project.test` exited 127 (our PATH dropped Python).
+    Reported cost ($1.10) was 2-3x the list price of the same tokens ($0.39-$0.52).
+  - Added after it: `sandbox.requirements` (wheels installed into the run workspace from the runtime,
+    `PYTHONPATH` + Amazon Python in PATH for the sandbox), `price` per agent (cost computed from it,
+    provider figure kept as `provider_cost_usd`), `heartbeat` events, CloudWatch dashboard `magi-runs`
+    (model vs infrastructure cost, run filter), S3 lifecycle IAM actions fixed
+    (`s3:Get/PutLifecycleConfiguration`), `DescribeMountTargets` on `*`.
+  - `fetch-result.sh` and `try-candidate.sh` (deploy/agentcore) download a run's patch and try it:
+    tests, Docker build, container, smoke requests. Tried end to end on the target with a sample patch.
+  - Second run (run-20261016-211807, stopped at 0.35 computed / 0.95 provider-reported USD): the toolchain
+    install worked but `git clean -fdx` in `WorkspaceManager.restore` deleted `.magi-toolchain`
+    (`project.test` exit 1, no pytest). Fixed with `git clean -e .magi-toolchain`; image `tc-2`.
+  - Third run (run-20261016-213811): `project.test` and 10/12 acceptance scenarios PASS in the sandbox;
+    ended INFRA_FAILURE because the repo's lint gate needs `flake8`, absent from the sandbox toolchain.
+    Cost: 0.549 USD at list price vs 1.458 USD reported by OpenRouter (2.7x, `sort: throughput` routing).
+    The provider figure is the one to trust: `price` stays optional and unset.
+  - Fourth run (run-20261016-221108, `sandbox.packages: [flake8]`, 0.61 USD, 71 calls): ended
+    BUDGET_EXHAUSTED on duration (3862 s > 3600 s) with no patch. Agents ran heredoc commands
+    (`python - <<'PYEOF'`) that waited on stdin until the command timeout (~616 s each). Fixed in
+    `CodeInterpreterRunner.remote_command` (`< /dev/null`); image rebuild and a new run still to do.
+  - Code is no longer in the image (a rebuild per change was unacceptable: 6 rebuilds in one session, none for
+    a dependency change). The image is a base (Python, git, uv, locked deps, `bootstrap.py`); `src/magi_system`
+    is a zip in S3 published by `deploy/agentcore/push_code.py` and loaded at session start. Rebuild the image
+    only when `pyproject.toml` / `uv.lock` change. Code written and tested, **not yet deployed**.
+  - Runs 092321 (INFRA_FAILURE: QA scenario that text-searches source), 101618 and 103712/111040
+    (UNRESOLVED_REQUIREMENT: true claims in the wrong format "refuted"). Found late: AgentCore hands new sessions
+    warm containers that loaded the OLD code bundle; 111040 ran code 4f1e77d7dbfa although 2d98576e6b86 was published, so
+    its fix was never exercised. `run_and_log.py` now checks the code version of the run, stops it before any model
+    call if it is stale and retries (3 attempts needed in the test). Fixes made: scenarios that text-search source or
+    select no tests are advisory (`engine/gates.py`), malformed symbol/policy claims are rejected in `ClaimDraft` so the
+    agent retries (`engine/schemas.py`). Not yet proven in a full run.
+  - QA can now correct a scenario that FAILED after seeing the code (once per scenario, the corrected command is
+    executed; `scenario_amended` event): `docs/state-and-failures.md`. Tested at unit level only, not in a full run.
+  - Still to confirm on AWS: a run whose `project.test` passes in the sandbox with the installed wheels,
+    and the computed cost against the OpenRouter Activity page.
 - CI: `uv sync --extra agentcore`; new `terraform` job (fmt/init/validate, no credentials).
-- Tests: **238 passed** (30 new). Lint is clean. `magi demo` reaches SUCCESS.
+- Tests: **259 passed**. Lint is clean. `magi demo` reaches SUCCESS.
 
 Next (needs explicit approval, fake model only): the AWS spike in
 `docs/agentcore/testing.md#spike-checklist-before-the-first-real-run`. Key unknowns:
@@ -241,3 +277,22 @@ See `docs/limits.md`. In priority order:
 - Use default permission mode (auto mode blocked a command in session 1).
 - Throwaway prototypes in `/tmp/lgproto/` (outside repo).
 - Stray `.README.md.swp` in repo root left untouched (now gitignored).
+
+### Session 6 follow-up — why run 144624 ended FAILED_VERIFICATION (2026-10-17)
+- Run 144624 (1.44 USD model cost, 156 calls): every executed gate PASS; `project.build` and `project.lint` were UNKNOWN
+  because the target `fastapi-agentcore` has no `.magi/config.yaml`, so no build/lint command exists. Found only at the end.
+- Fix: **preflight at intake** (`gates.project_gate_problems`, `nodes_intake.intake`): a mandatory project gate that cannot run
+  stops the run as `UNRESOLVED_REQUIREMENT` before any model call. Tests: `test_no_success_when_a_mandatory_check_cannot_run`,
+  `test_unauthorized_project_command_is_not_executed`.
+- Next: the target needs `.magi/config.yaml` (build `python -m compileall -q app`, test `python -m pytest -q`, lint
+  `python -m flake8 . --count --select=E9,F63,F7,F82 ...`; validated locally with `resolve_project_config`). Not pushed: operator decides.
+- Cost analysis of the run: tool-loop turns dominate (dev.writer 25, dev.pair 24, tech_writer 24 calls); not the blocker, left as is.
+
+### First SUCCESS on AgentCore (2026-10-17)
+- `run-20261017-155113`: SUCCESS, 116 calls, 1.35 USD model + ~0.12 infra, 25 min 44 s, all 10 mandatory gates PASS, 21-file patch.
+  Target `.magi/config.yaml` pushed to `fastapi-agentcore` main (d615121); code bundle `1ff47e162530` (preflight).
+- Independent check (`try-candidate.sh` with Docker): patch applies, 133 tests pass, image builds, `/api/mgmt/ready` 200,
+  the 3 toolbox tools answer 200. Case study: `examples/run-20261017-155113-agentcore/{article,training}.md`.
+- Warm containers served old code on 4 of 5 starts; the stale-code guard handled it at zero cost. A runtime version bump
+  (`terraform apply`) would force fresh containers; not needed this time.
+

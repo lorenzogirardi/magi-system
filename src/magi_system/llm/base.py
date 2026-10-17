@@ -49,6 +49,7 @@ class ModelResponse:
     cost_usd: float | None = None
     model: str = ""
     truncated: bool = False  # the provider stopped at max_output_tokens
+    provider_cost_usd: float | None = None  # figure reported by the provider; cost_usd may be computed from a price
 
 
 class ModelAdapter(Protocol):

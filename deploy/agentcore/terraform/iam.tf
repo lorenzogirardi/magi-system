@@ -57,8 +57,13 @@ data "aws_iam_policy_document" "runtime" {
     resources = ["${aws_s3_bucket.checkpoints.arn}/*"]
   }
   statement {
+    sid       = "CodeBundleRead"
+    actions   = ["s3:GetObject"]
+    resources = ["${aws_s3_bucket.code.arn}/code/*"]
+  }
+  statement {
     sid       = "CheckpointOffloadLifecycle"
-    actions   = ["s3:GetBucketLifecycleConfiguration", "s3:PutBucketLifecycleConfiguration"]
+    actions   = ["s3:GetLifecycleConfiguration", "s3:PutLifecycleConfiguration"]
     resources = [aws_s3_bucket.checkpoints.arn]
   }
   statement {

@@ -1,0 +1,638 @@
+{
+  "events": 1408,
+  "kinds": {
+    "claim_verified": 491,
+    "tool_call": 461,
+    "finding": 160,
+    "llm_call": 116,
+    "node_start": 60,
+    "node_end": 60,
+    "check": 39,
+    "proposal": 6,
+    "magi_round": 2,
+    "selection": 2,
+    "handoff": 2,
+    "run_start": 1,
+    "intake": 1,
+    "pair_initial_assessment": 1,
+    "agent_invalid_output": 1,
+    "scenario_amended": 1,
+    "documentation": 1,
+    "gate": 1,
+    "publication": 1,
+    "run_end": 1
+  },
+  "started": "15:52:46",
+  "ended": "16:18:30",
+  "duration_seconds": 1544,
+  "per_agent": {
+    "dev.pair": {
+      "calls": 12,
+      "input_tokens": 775908,
+      "output_tokens": 61709,
+      "cost_usd": 0.1194,
+      "avg_latency_ms": 14522
+    },
+    "dev.writer": {
+      "calls": 12,
+      "input_tokens": 492090,
+      "output_tokens": 65543,
+      "cost_usd": 0.1028,
+      "avg_latency_ms": 17466
+    },
+    "doc.tech_writer": {
+      "calls": 13,
+      "input_tokens": 702502,
+      "output_tokens": 68976,
+      "cost_usd": 0.1413,
+      "avg_latency_ms": 17877
+    },
+    "magi.balthasar": {
+      "calls": 18,
+      "input_tokens": 709204,
+      "output_tokens": 91846,
+      "cost_usd": 0.1948,
+      "avg_latency_ms": 20060
+    },
+    "magi.casper": {
+      "calls": 26,
+      "input_tokens": 1174809,
+      "output_tokens": 95943,
+      "cost_usd": 0.2104,
+      "avg_latency_ms": 14617
+    },
+    "magi.melchior": {
+      "calls": 22,
+      "input_tokens": 964895,
+      "output_tokens": 97097,
+      "cost_usd": 0.1981,
+      "avg_latency_ms": 17826
+    },
+    "spec.qa": {
+      "calls": 4,
+      "input_tokens": 203699,
+      "output_tokens": 68897,
+      "cost_usd": 0.1377,
+      "avg_latency_ms": 66058
+    },
+    "spec.security": {
+      "calls": 4,
+      "input_tokens": 203695,
+      "output_tokens": 47315,
+      "cost_usd": 0.1118,
+      "avg_latency_ms": 47484
+    },
+    "spec.sre": {
+      "calls": 5,
+      "input_tokens": 247594,
+      "output_tokens": 66651,
+      "cost_usd": 0.1354,
+      "avg_latency_ms": 48748
+    }
+  },
+  "llm_calls_by_purpose": {
+    "analysis": 29,
+    "proposal": 28,
+    "dev_writer": 12,
+    "dev_pair": 11,
+    "documentation": 11,
+    "preventive_review": 8,
+    "candidate_review": 7,
+    "cross_review": 6,
+    "final_review": 3,
+    "pair_assessment": 1
+  },
+  "totals": {
+    "calls": 116,
+    "input_tokens": 5474396,
+    "output_tokens": 663977,
+    "cost_usd": 1.3517
+  },
+  "nodes": [
+    {
+      "node": "intake",
+      "round": 0,
+      "start": "15:52:46",
+      "seconds": 0.7
+    },
+    {
+      "node": "magi_begin",
+      "round": 0,
+      "start": "15:52:47",
+      "seconds": 0.2
+    },
+    {
+      "node": "magi_analyze[magi.melchior]",
+      "round": 0,
+      "start": "15:52:47",
+      "seconds": 0.0
+    },
+    {
+      "node": "magi_analyze[magi.balthasar]",
+      "round": 0,
+      "start": "15:52:47",
+      "seconds": 0.0
+    },
+    {
+      "node": "magi_analyze[magi.casper]",
+      "round": 0,
+      "start": "15:52:47",
+      "seconds": 114.8
+    },
+    {
+      "node": "magi_analysis_collect",
+      "round": 0,
+      "start": "15:54:42",
+      "seconds": 1.4
+    },
+    {
+      "node": "magi_propose[magi.casper]",
+      "round": 0,
+      "start": "15:54:43",
+      "seconds": 0.0
+    },
+    {
+      "node": "magi_propose[magi.melchior]",
+      "round": 0,
+      "start": "15:54:43",
+      "seconds": 0.0
+    },
+    {
+      "node": "magi_propose[magi.balthasar]",
+      "round": 0,
+      "start": "15:54:43",
+      "seconds": 161.7
+    },
+    {
+      "node": "magi_proposal_collect",
+      "round": 0,
+      "start": "15:57:25",
+      "seconds": 0.1
+    },
+    {
+      "node": "magi_review[magi.melchior]",
+      "round": 0,
+      "start": "15:57:25",
+      "seconds": 0.0
+    },
+    {
+      "node": "magi_review[magi.balthasar]",
+      "round": 0,
+      "start": "15:57:25",
+      "seconds": 0.0
+    },
+    {
+      "node": "magi_review[magi.casper]",
+      "round": 0,
+      "start": "15:57:25",
+      "seconds": 0.0
+    },
+    {
+      "node": "magi_review[spec.qa]",
+      "round": 0,
+      "start": "15:57:25",
+      "seconds": 0.1
+    },
+    {
+      "node": "magi_review[spec.sre]",
+      "round": 0,
+      "start": "15:57:25",
+      "seconds": 0.2
+    },
+    {
+      "node": "magi_review[spec.security]",
+      "round": 0,
+      "start": "15:57:26",
+      "seconds": 16.7
+    },
+    {
+      "node": "magi_review[doc.tech_writer]",
+      "round": 0,
+      "start": "15:57:42",
+      "seconds": 64.8
+    },
+    {
+      "node": "magi_review_collect",
+      "round": 0,
+      "start": "15:58:47",
+      "seconds": 0.1
+    },
+    {
+      "node": "magi_verify",
+      "round": 0,
+      "start": "15:58:47",
+      "seconds": 85.3
+    },
+    {
+      "node": "magi_select",
+      "round": 0,
+      "start": "16:00:12",
+      "seconds": 0.1
+    },
+    {
+      "node": "magi_begin",
+      "round": 1,
+      "start": "16:00:13",
+      "seconds": 1.0
+    },
+    {
+      "node": "magi_propose[magi.casper]",
+      "round": 1,
+      "start": "16:00:14",
+      "seconds": 0.0
+    },
+    {
+      "node": "magi_propose[magi.melchior]",
+      "round": 1,
+      "start": "16:00:14",
+      "seconds": 0.0
+    },
+    {
+      "node": "magi_propose[magi.balthasar]",
+      "round": 1,
+      "start": "16:00:14",
+      "seconds": 112.8
+    },
+    {
+      "node": "magi_proposal_collect",
+      "round": 1,
+      "start": "16:02:06",
+      "seconds": 0.1
+    },
+    {
+      "node": "magi_review[magi.casper]",
+      "round": 1,
+      "start": "16:02:06",
+      "seconds": 0.0
+    },
+    {
+      "node": "magi_review[magi.melchior]",
+      "round": 1,
+      "start": "16:02:06",
+      "seconds": 0.0
+    },
+    {
+      "node": "magi_review[magi.balthasar]",
+      "round": 1,
+      "start": "16:02:06",
+      "seconds": 0.0
+    },
+    {
+      "node": "magi_review[spec.qa]",
+      "round": 1,
+      "start": "16:02:06",
+      "seconds": 0.1
+    },
+    {
+      "node": "magi_review[spec.sre]",
+      "round": 1,
+      "start": "16:02:07",
+      "seconds": 0.3
+    },
+    {
+      "node": "magi_review[spec.security]",
+      "round": 1,
+      "start": "16:02:07",
+      "seconds": 18.7
+    },
+    {
+      "node": "magi_review[doc.tech_writer]",
+      "round": 1,
+      "start": "16:02:26",
+      "seconds": 91.9
+    },
+    {
+      "node": "magi_review_collect",
+      "round": 1,
+      "start": "16:03:58",
+      "seconds": 0.1
+    },
+    {
+      "node": "magi_verify",
+      "round": 1,
+      "start": "16:03:58",
+      "seconds": 24.9
+    },
+    {
+      "node": "magi_select",
+      "round": 1,
+      "start": "16:04:23",
+      "seconds": 0.2
+    },
+    {
+      "node": "dev_writer",
+      "round": 1,
+      "start": "16:04:23",
+      "seconds": 242.8
+    },
+    {
+      "node": "dev_initial_checks",
+      "round": 1,
+      "start": "16:08:26",
+      "seconds": 9.9
+    },
+    {
+      "node": "dev_pair_assess",
+      "round": 1,
+      "start": "16:08:35",
+      "seconds": 37.2
+    },
+    {
+      "node": "dev_pair",
+      "round": 1,
+      "start": "16:09:13",
+      "seconds": 192.7
+    },
+    {
+      "node": "triage",
+      "round": 1,
+      "start": "16:12:25",
+      "seconds": 0.1
+    },
+    {
+      "node": "verify_checks",
+      "round": 1,
+      "start": "16:12:25",
+      "seconds": 32.0
+    },
+    {
+      "node": "specialist_review[spec.qa]",
+      "round": 1,
+      "start": "16:12:57",
+      "seconds": 0.0
+    },
+    {
+      "node": "specialist_review[spec.sre]",
+      "round": 1,
+      "start": "16:12:57",
+      "seconds": 0.0
+    },
+    {
+      "node": "specialist_review[spec.security]",
+      "round": 1,
+      "start": "16:12:57",
+      "seconds": 122.1
+    },
+    {
+      "node": "specialist_collect",
+      "round": 1,
+      "start": "16:15:00",
+      "seconds": 6.4
+    },
+    {
+      "node": "triage",
+      "round": 1,
+      "start": "16:15:06",
+      "seconds": 0.0
+    },
+    {
+      "node": "tech_writer",
+      "round": 1,
+      "start": "16:15:06",
+      "seconds": 93.6
+    },
+    {
+      "node": "triage",
+      "round": 1,
+      "start": "16:16:40",
+      "seconds": 0.0
+    },
+    {
+      "node": "verify_checks",
+      "round": 1,
+      "start": "16:16:40",
+      "seconds": 31.5
+    },
+    {
+      "node": "specialist_review[spec.qa]",
+      "round": 1,
+      "start": "16:17:11",
+      "seconds": 0.0
+    },
+    {
+      "node": "specialist_review[spec.sre]",
+      "round": 1,
+      "start": "16:17:11",
+      "seconds": 0.0
+    },
+    {
+      "node": "specialist_review[spec.security]",
+      "round": 1,
+      "start": "16:17:11",
+      "seconds": 28.5
+    },
+    {
+      "node": "specialist_collect",
+      "round": 1,
+      "start": "16:17:40",
+      "seconds": 2.6
+    },
+    {
+      "node": "triage",
+      "round": 1,
+      "start": "16:17:42",
+      "seconds": 0.1
+    },
+    {
+      "node": "final_review[magi.melchior]",
+      "round": 1,
+      "start": "16:17:42",
+      "seconds": 0.1
+    },
+    {
+      "node": "final_review[magi.balthasar]",
+      "round": 1,
+      "start": "16:17:42",
+      "seconds": 0.1
+    },
+    {
+      "node": "final_review[magi.casper]",
+      "round": 1,
+      "start": "16:17:42",
+      "seconds": 46.6
+    },
+    {
+      "node": "final_collect",
+      "round": 1,
+      "start": "16:18:29",
+      "seconds": 0.8
+    },
+    {
+      "node": "triage",
+      "round": 1,
+      "start": "16:18:30",
+      "seconds": 0.0
+    },
+    {
+      "node": "gate",
+      "round": 1,
+      "start": "16:18:30",
+      "seconds": 0.8
+    }
+  ],
+  "slowest_nodes": [
+    {
+      "node": "dev_writer",
+      "round": 1,
+      "start": "16:04:23",
+      "seconds": 242.8
+    },
+    {
+      "node": "dev_pair",
+      "round": 1,
+      "start": "16:09:13",
+      "seconds": 192.7
+    },
+    {
+      "node": "magi_propose[magi.balthasar]",
+      "round": 0,
+      "start": "15:54:43",
+      "seconds": 161.7
+    },
+    {
+      "node": "specialist_review[spec.security]",
+      "round": 1,
+      "start": "16:12:57",
+      "seconds": 122.1
+    },
+    {
+      "node": "magi_analyze[magi.casper]",
+      "round": 0,
+      "start": "15:52:47",
+      "seconds": 114.8
+    },
+    {
+      "node": "magi_propose[magi.balthasar]",
+      "round": 1,
+      "start": "16:00:14",
+      "seconds": 112.8
+    },
+    {
+      "node": "tech_writer",
+      "round": 1,
+      "start": "16:15:06",
+      "seconds": 93.6
+    },
+    {
+      "node": "magi_review[doc.tech_writer]",
+      "round": 1,
+      "start": "16:02:26",
+      "seconds": 91.9
+    }
+  ],
+  "gates": {
+    "project.build": {
+      "verdict": "PASS",
+      "exit_code": 0,
+      "command": "python -m compileall -q app"
+    },
+    "project.test": {
+      "verdict": "PASS",
+      "exit_code": 0,
+      "command": "python -m pytest -q"
+    },
+    "project.lint": {
+      "verdict": "PASS",
+      "exit_code": 0,
+      "command": "python -m flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics"
+    },
+    "qa.scenario:acc-openapi-documents-toolbox": {
+      "verdict": "PASS",
+      "exit_code": 0,
+      "command": "python -c \"from fastapi.testclient import TestClient; from app.main import create_app; c=TestClient(create_app()); s=c.get('/api/openapi.json').json(); paths=[p for p in s['paths'] if 'toolbox' in p]; assert len(paths)>=2, paths\""
+    },
+    "qa.scenario:acc-json-validate-behaviour": {
+      "verdict": "PASS",
+      "exit_code": 0,
+      "command": "python -c \"from fastapi.testclient import TestClient; from app.main import create_app; c=TestClient(create_app()); a=('admin','password'); ok=c.post('/api/toolbox/runs', json={'tool':'json.validate','input':{'text':'[1,2,3]'}}, auth=a); assert ok.status_code==200, ok.status_code; assert ok.json()['outcome']=='pass', ok.json(); bad=c.post('/api/toolbox/runs', json={'tool':'json.validate','input':{'text':'[1,2,'}}, auth=a); assert bad.status_code==200, bad.status_code; assert bad.json()['outcome']=='fail', bad.json()\""
+    },
+    "qa.scenario:acc-toolbox-requires-auth": {
+      "verdict": "PASS",
+      "exit_code": 0,
+      "command": "python -c \"from fastapi.testclient import TestClient; from app.main import create_app; c=TestClient(create_app()); r=c.get('/api/toolbox/tools'); assert r.status_code==401, r.status_code\""
+    },
+    "qa.scenario:acc-catalog-lists-three-tools": {
+      "verdict": "PASS",
+      "exit_code": 0,
+      "command": "python -c \"from fastapi.testclient import TestClient; from app.main import create_app; c=TestClient(create_app()); r=c.get('/api/toolbox/tools', auth=('admin','password')); assert r.status_code==200, r.status_code; b=r.json(); items=b if isinstance(b,list) else b.get('tools',[]); ids={t['id'] for t in items}; assert ids=={'json.validate','text.diff','k8s.manifest.inspect'}, ids; assert all({'description','version','input_schema'} <= set(t) for t in items)\""
+    },
+    "qa.scenario:acc-toolbox-routes-registered": {
+      "verdict": "PASS",
+      "exit_code": 0,
+      "command": "python -c \"from app.main import create_app; app=create_app(); paths=set(app.openapi()['paths']); assert any(p.endswith('/toolbox/tools') for p in paths), sorted(paths); assert any(p.endswith('/toolbox/runs') for p in paths), sorted(paths)\""
+    },
+    "qa.scenario:acc-k8s-manifest-inspect-behaviour": {
+      "verdict": "PASS",
+      "exit_code": 0,
+      "command": "python -c \"from fastapi.testclient import TestClient; from app.main import create_app; m='apiVersion: apps/v1\\nkind: Deployment\\nmetadata:\\n  name: example\\nspec:\\n  template:\\n    spec:\\n      containers:\\n      - name: app\\n        image: nginx:latest\\n        securityContext:\\n          privileged: true\\n'; c=TestClient(create_app()); r=c.post('/api/toolbox/runs', json={'tool':'k8s.manifest.inspect','input':{'manifest':m}}, auth=('admin','password')); assert r.status_code==200, r.status_code; codes={f['code'] for f in r.json()['findings']}; assert any('PRIVILEGED' in x for x in codes), codes; assert any('LATEST' in x for x in codes), codes; assert any('PROBE' in x for x in codes), codes\""
+    },
+    "qa.scenario:acc-over-limit-controlled-error": {
+      "verdict": "PASS",
+      "exit_code": 0,
+      "command": "python -c \"import os; os.environ['TOOLBOX_MAX_INPUT_BYTES']='64'; from fastapi.testclient import TestClient; from app.main import create_app; c=TestClient(create_app()); r=c.post('/api/toolbox/runs', json={'tool':'json.validate','input':{'text':'x'*1000}}, auth=('admin','password')); assert r.status_code in (400,413,422), r.status_code; assert r.status_code!=500\""
+    },
+    "qa.scenario:acc-app-starts-no-regression": {
+      "verdict": "PASS",
+      "exit_code": 0,
+      "command": "python -m pytest -q"
+    },
+    "qa.scenario:acc-text-diff-behaviour": {
+      "verdict": "PASS",
+      "exit_code": 0,
+      "command": "python -c \"from fastapi.testclient import TestClient; from app.main import create_app; c=TestClient(create_app()); r=c.post('/api/toolbox/runs', json={'tool':'text.diff','input':{'left':'abc','right':'abd'}}, auth=('admin','password')); assert r.status_code==200, r.status_code; d=r.json()['output']['diff']; assert '@@' in d, d\""
+    },
+    "integrity.protected_paths": {
+      "verdict": "PASS",
+      "exit_code": null,
+      "command": null
+    },
+    "scope.write_scopes": {
+      "verdict": "PASS",
+      "exit_code": null,
+      "command": null
+    },
+    "qa.acceptance": {
+      "verdict": "PASS",
+      "exit_code": null,
+      "command": null
+    },
+    "sre.review": {
+      "verdict": "PASS",
+      "exit_code": null,
+      "command": null
+    },
+    "security.review": {
+      "verdict": "PASS",
+      "exit_code": null,
+      "command": null
+    },
+    "magi.final_review": {
+      "verdict": "PASS",
+      "exit_code": null,
+      "command": null
+    }
+  },
+  "tool_calls": {
+    "magi.casper:read_file": 87,
+    "magi.melchior:read_file": 76,
+    "magi.balthasar:read_file": 66,
+    "magi.casper:grep": 37,
+    "magi.melchior:grep": 36,
+    "dev.writer:read_file": 29,
+    "magi.balthasar:grep": 21,
+    "dev.writer:write_file": 20,
+    "dev.pair:read_file": 18,
+    "doc.tech_writer:read_file": 13,
+    "dev.pair:run_command": 11,
+    "dev.pair:grep": 10,
+    "doc.tech_writer:grep": 8,
+    "dev.writer:run_command": 6,
+    "dev.pair:write_file": 5
+  },
+  "infra": {
+    "active_seconds": 1636,
+    "usd_per_hour": 0.27,
+    "cost_usd_estimate": 0.1227
+  },
+  "failures": []
+}
