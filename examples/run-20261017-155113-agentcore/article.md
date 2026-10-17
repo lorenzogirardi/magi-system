@@ -270,6 +270,51 @@ agents:
 The round-1 revision fixed the wording. Two proposals were admissible, the third had two critical claims still
 unresolved, and `prop-2e668f554d8554a3` was selected.
 
+### 3.5 Why this run needed two MAGI rounds when the earlier runs needed one
+
+The first study (`run-20261015-205501-e0a70f`) and the previous AgentCore run (`run-20261017-144624`) both selected a plan in
+round 0. This run did not: round 0 ended in `revise` and the plan was chosen in round 1.
+
+| Run | Selections | Model calls |
+|---|---|---:|
+| `run-20261015-205501-e0a70f` (first study, local) | round 0: selected | 105 |
+| `run-20261017-144624` (AgentCore, FAILED_VERIFICATION) | round 0: selected | 156 |
+| `run-20261017-155113` (this run, SUCCESS) | round 0: revise; round 1: selected | 116 |
+
+What the data of this run show. The proposals' claims in round 0, by kind and verification result:
+
+| Claim kind | Supported | Refuted | Unverifiable |
+|---|---:|---:|---:|
+| `file_exists` | 6 | **20** | |
+| `text_present` | 29 | **11** | |
+| `policy_exists` | | 1 | |
+| `command_succeeds` | 9 | | |
+| `package_version` | 3 | | |
+| `symbol_exists` | 1 | | |
+| `operational_guarantee`, `business_assumption` | | | 3 |
+
+In round 1 the same kinds were all supported (10 `file_exists`, 59 `text_present`, 2 `symbol_exists`, and so on). The refuted
+`file_exists` and `text_present` claims in round 0 are statements about the result of the change ("the router module exists after
+the change", "the documentation page exists"), which the verifier checks against the baseline, where those files do not exist yet.
+In round 1 the architects restated them in a form the baseline can confirm, and the proposals became admissible.
+
+What we can and cannot say:
+
+- **Almost nothing we changed between the runs touches this step.** Since the commit of the first study, the MAGI phase code
+  (`nodes_magi.py`), the analysis, proposal and cross-review prompts, the selection logic and the verification tools are
+  unchanged. The one relevant change is the claim-format validation in `schemas.py`, added for the AgentCore runs: it acts only
+  on `symbol_exists` and `policy_exists` claims (it rejects a bare path, or repairs it from the claim's `pattern`), so it
+  cannot cause refutations of `file_exists` or `text_present` claims.
+- **The other changes do not affect the number of rounds either**: the preflight at intake, the code bundle loaded from S3, the
+  toolchain installed by the Runtime, the QA scenario correction and the provider-reported cost all act before or after the
+  MAGI board.
+- **The likeliest explanation is model variance on an existing weakness**: the claim language lets an agent state a claim about
+  the future, and the verifier refutes it. The two earlier runs happened to word their claims in a verifiable way.
+- **This is not proven.** It is one run per case, with no controlled comparison, and the model is not deterministic. The remedy
+  is on the platform side (a claim about a file the plan creates should be a plan item, not a baseline fact), listed in §7.1.
+
+The cost of the second round in this run was about 4 minutes and US$ 0.19 of architect calls (§3.4).
+
 ## 4. Implementation
 
 ### 4.1 `dev.writer`
