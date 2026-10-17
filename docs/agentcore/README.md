@@ -7,9 +7,9 @@ AgentCore only hosts the process; **models are always called through OpenRouter,
 Amazon Bedrock models**. The deployment enforces this: the entrypoint rejects any other
 provider, and no IAM role can invoke Bedrock models.
 
-> **Status: implemented and tested offline, not deployed.** No AWS resource has been created
-> and no run has executed on AWS. The [spike checklist](testing.md#spike-checklist-before-the-first-real-run)
-> lists what must be proven on AWS before a real run.
+> **Status: deployed in `eu-north-1` and verified on a real target** (first SUCCESS on 2026-10-17, see the
+> [case study](../../examples/run-20261017-155113-agentcore/article.md)). Not proven yet: `resume` from a new session after
+> `StopRuntimeSession`, parallel runs, and the 8 h session limit (see [known limits](../limits.md)).
 
 ## Why
 

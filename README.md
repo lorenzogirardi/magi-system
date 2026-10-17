@@ -31,7 +31,9 @@ Every run ends in one of two ways:
 It never pushes, merges or deploys. Those stay a separate, human-authorized step.
 
 See it on a real target: [case study of the first SUCCESS](examples/run-20261015-205501-e0a70f/article.md)
-(a Dev/SRE Toolbox added to a FastAPI app, 10/10 gates, $1.05, 19 minutes).
+(a Dev/SRE Toolbox added to a FastAPI app, 10/10 gates, $1.05, 19 minutes), and the same change
+[hosted on Amazon Bedrock AgentCore](examples/run-20261017-155113-agentcore/article.md)
+(10/10 gates, $1.35 of model cost, 26 minutes).
 
 ## Why three architects
 
@@ -185,8 +187,15 @@ An optional deployment runs magi-system on managed AWS services only (no EC2):
 - EFS holds the workspaces; DynamoDB holds the checkpoints.
 - Models are still called through OpenRouter only.
 
-It includes an image (`deploy/agentcore/Dockerfile`), a local smoke test and Terraform.
-**Implemented and tested offline; not deployed yet.** See [docs/agentcore/](docs/agentcore/README.md).
+One run is one Runtime session; the code is a bundle in S3 loaded at session start, so a code change
+needs no image rebuild (`deploy/agentcore/push_code.py`). The deployment is Terraform
+(`deploy/agentcore/terraform`): a dedicated VPC, a switchable NAT gateway (`deploy/agentcore/nat.sh`, the only
+hourly-billed part), a CloudWatch dashboard with model and infrastructure cost, and the helpers to start a run,
+fetch its patch and try it (`run_and_log.py`, `fetch-result.sh`, `try-candidate.sh`).
+
+**Deployed and verified on a real target** (SUCCESS, case study above). See
+[docs/agentcore/](docs/agentcore/README.md), with [deploy](docs/agentcore/deploy.md),
+[observability](docs/agentcore/observability.md) and [limits and costs](docs/agentcore/limits-and-costs.md).
 
 ## Documentation
 
@@ -195,9 +204,13 @@ It includes an image (`deploy/agentcore/Dockerfile`), a local smoke test and Ter
 - [Security model](docs/security.md): trust boundaries, what is and is not a sandbox.
 - [Providers](docs/providers.md): configuring real LLMs.
 - [GitHub Actions](docs/github-actions.md): composite action, example workflow, security rules.
-- [AgentCore hosting](docs/agentcore/README.md): managed AWS deployment, request flow, sandbox, Terraform, spike checklist.
+- [AgentCore hosting](docs/agentcore/README.md): managed AWS deployment, request flow, sandbox, Terraform, code bundles,
+  observability, costs and limits.
 - [Known limits](docs/limits.md): what is not implemented.
 - [Brief](docs/brief/): the normative specification this implements.
 - [Case study: first SUCCESS on a real target](examples/run-20261015-205501-e0a70f/article.md)
   and [the twelve runs that led to it](examples/run-20261015-205501-e0a70f/training.md),
   with the request and the run artifacts.
+- [Case study: the same change on Amazon Bedrock AgentCore](examples/run-20261017-155113-agentcore/article.md)
+  and [operational lessons](examples/run-20261017-155113-agentcore/training.md), with the request, the full run state,
+  the patch and console screenshots.

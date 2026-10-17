@@ -36,14 +36,11 @@
   and open connections are reset on wake. A run left unattended can hang until wake and
   then lose its in-flight model calls (reported as retryable `provider_error`). Keep the
   machine awake for the duration of the run: `caffeinate -i uv run magi run ...`.
-- **AgentCore hosting is not deployed.** Under `deploy/agentcore/` there are code, image,
-  Terraform and docs, tested offline only:
-  - The DynamoDB store is tested under moto.
-  - The Code Interpreter runner is tested with fake clients.
-  - The entrypoint is tested directly and through a local container smoke test.
-  - Terraform passes `validate` only, with no `plan` or `apply`.
-
-  Items still to prove on AWS: the Code Interpreter response shape, the sandbox toolchain,
-  and git/flock on EFS. The [spike checklist](agentcore/testing.md#spike-checklist-before-the-first-real-run)
-  lists every item. A sandbox command is capped at 840 s. Hosted runs clone public
-  repositories only, since there is no Git credential helper yet.
+- **AgentCore hosting: deployed and used once to a SUCCESS, with open points.** It is deployed in one account and
+  Region (`eu-north-1`) and has delivered a verified change on a real target (see the
+  [case study](../examples/run-20261017-155113-agentcore/article.md)). Proven on AWS: the Code Interpreter in VPC
+  mode with a per-run EFS mount, the wheel-only sandbox toolchain, git on EFS, the code bundle loaded from S3, the stale-container
+  guard and the cost dashboard. **Not proven yet**: `resume` of a run after `StopRuntimeSession` from a new session, two runs in
+  parallel, and behaviour at the 8 h maximum session lifetime. A sandbox command is capped at 840 s. Hosted runs clone public
+  repositories only, since there is no Git credential helper yet. The NAT gateway is the only hourly cost and must be stopped when idle
+  (`deploy/agentcore/nat.sh stop`).

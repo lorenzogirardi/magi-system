@@ -1,6 +1,6 @@
 # STATUS — magi-system
 
-Last updated: 2026-10-16 (session 5, AgentCore hosting: implemented and tested offline, not deployed).
+Last updated: 2026-10-17 (session 6: AgentCore deployed in eu-north-1; first SUCCESS on a real target, run-20261017-155113).
 
 ## State
 
